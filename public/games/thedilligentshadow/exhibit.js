@@ -1045,8 +1045,42 @@ function sitPose(u, end) {
   return { x: hx, pose: o };
 }
 
+// ---------- the angry stomp ----------
+// Fists down, head lowered, she stamps one foot then the other. Each foot lifts and slams straight down onto the
+// spot it stood on (legs solved to the planted ankles), and the impact jolts her hips, shoulders and fists.
+const STOMP = { pre: 0.3, stamp: 0.42, post: 0.55 };
+const stompDur = n => STOMP.pre + n * STOMP.stamp + STOMP.post;
+function stompPose(t, n, from) {
+  const st = POSES.stand, total = stompDur(n);
+  const fx = Math.sin(st.thighA) * L1 + Math.sin(st.thighA - st.kneeA) * L2;   // standing ankle, relative to the hip
+  const anger = ss(t / STOMP.pre) * (1 - ss((t - (total - STOMP.post)) / STOMP.post));
+  const H = 0.34 * L2;
+  let lift = 0, imp = 0, side = 'A';
+  for (let i = 0; i < n; i++) {
+    const u = (t - STOMP.pre - i * STOMP.stamp) / STOMP.stamp;
+    if (u >= 0 && u < 1) {
+      side = i % 2 ? 'B' : 'A';
+      lift = u < 0.5 ? H * Math.sin(u / 0.5 * Math.PI / 2)                   // knee comes up
+           : u < 0.72 ? H * (1 - Math.pow((u - 0.5) / 0.22, 2)) : 0;          // and slams down, accelerating
+    }
+    const s = (t - STOMP.pre - (i + 0.72) * STOMP.stamp);
+    if (s >= 0) imp = Math.max(imp, Math.exp(-s / 0.07));
+  }
+  const hy = st.hipY - 0.025 * L1 * anger - 0.03 * L1 * imp;
+  const flat = ik(0, hy, fx, ANKLE_H), up = ik(0, hy, fx + 0.25 * lift, ANKLE_H + lift);
+  const lifted = side === 'A' ? up : flat, other = side === 'A' ? flat : up;
+  const toe = 0.3 * lift / H;
+  const angry = { lean: 0.17 + 0.07 * imp, nod: 0.3 + 0.12 * imp, uA: -0.16 - 0.12 * imp, fA: 0.28 - 0.1 * imp, uB: -0.2 - 0.12 * imp, fB: 0.3 - 0.1 * imp };
+  const o = { hipY: hy, thighA: lifted.a, kneeA: lifted.b, pitchA: side === 'A' ? toe : 0, thighB: other.a, kneeB: other.b, pitchB: side === 'B' ? toe : 0 };
+  const base = t < STOMP.pre ? from : st;   // ease in from however the walk left her arms and head, ease out to standing
+  for (const key in angry) o[key] = lerp(base[key], angry[key], anger);
+  return o;
+}
+
 // ---------- behaviour ----------
-const S = { mode: 'rest', t: 0, fails: 0, hit: false, patience: 3 };
+const S = { mode: 'rest', t: 0, fails: 0, hit: false, patience: 3, clock: 0, flips: [], stomps: 0 };
+// flipping the light back and forth while she walks between the switch and her chair makes her stamp her feet
+const ANGER = { flips: 3, within: 8 };
 const rand = (a, b) => a + Math.random() * (b - a);
 let seatedPose = null;
 function startSit(endName, next, dur = 1.25) { S.sit = { u: 0, dir: 1, dur, end: POSES[endName] }; S.mode = 'sitting'; S.next = next; seatedPose = endName; }
@@ -1060,14 +1094,23 @@ function stepSit(dt) {
 }
 // walk somewhere; if already walking somewhere else, finish the current stride gracefully first
 function goTo(tx, dt, gait) {
-  if (walker && Math.abs(walker.tx - tx) > 1e-6 && !walker.stopping) {
-    const w = walker, half = 0.5 * w.S, D = Math.min(w.D, Math.ceil((w.d + 0.25 * w.S) / half - 1e-6) * half);
-    if (D < w.D - 1e-6) { w.D = D; w.tx = w.x0 + w.dir * D; w.lastSwing = Math.abs(((D / w.S + OFFSETS.A) % 1) - 0.75) < 0.01 ? 'A' : 'B'; }
-    w.stopping = true;
-    w.vOverride = GAITS.walk.v * 1.15;   // finish the step briskly: she has noticed something
-  }
+  if (walker && Math.abs(walker.tx - tx) > 1e-6) stopWalk();
   if (walker && walker.stopping) { if (walkTo(walker.tx, dt)) walker = null; return false; }
   return walkTo(tx, dt, gait);
+}
+function stopWalk() {   // end the walk at the next foot-together point
+  const w = walker;
+  if (!w || w.stopping) return;
+  const half = 0.5 * w.S, D = Math.min(w.D, Math.ceil((w.d + 0.25 * w.S) / half - 1e-6) * half);
+  if (D < w.D - 1e-6) { w.D = D; w.tx = w.x0 + w.dir * D; w.lastSwing = Math.abs(((D / w.S + OFFSETS.A) % 1) - 0.75) < 0.01 ? 'A' : 'B'; }
+  w.stopping = true;
+  w.vOverride = GAITS.walk.v * 1.15;   // finish the step briskly: she has noticed something
+}
+// come to a standstill wherever she is: finish the stride or the turn in progress; true once standing still
+function halt(dt) {
+  if (turn) { turnInPlace(turn.target > 0 ? 1 : -1, dt); return false; }
+  if (walker) { stopWalk(); if (walkTo(walker.tx, dt)) walker = null; return false; }
+  return true;
 }
 let turnDt = 0;
 function turnTo(face) { return turnInPlace(face, turnDt); }
@@ -1080,7 +1123,7 @@ function afterKick() {   // decide what the next attempt is, or give up
 }
 function stepFigure(dt, t) {
   if (!rig.ready) return;
-  S.t += dt; turnDt = dt;
+  S.t += dt; S.clock += dt; turnDt = dt;
   pushForce = 0;
   switch (S.mode) {
     case 'rest':                   // sitting quietly; when the lamp comes on she takes a moment before getting up
@@ -1103,7 +1146,7 @@ function stepFigure(dt, t) {
       if (goTo(STRIKE.x, dt, 'walk')) { S.mode = 'kick'; S.t = 0; S.hit = false; }
       break;
     case 'kick': {
-      if (!turnTo(1)) break;
+      if (!turnTo(1)) { S.t = Math.min(S.t, 0); break; }   // the kick starts once she faces the switch, not while she turns
       const u = S.t / KICK.dur;
       const kp = kickPose(Math.max(0, u), dragging && on);
       if (u < 0.3) blend(kp, 1 - Math.pow(1e-6, dt)); else fig.pose = kp;
@@ -1169,6 +1212,13 @@ function stepFigure(dt, t) {
         else { newAttempt(); S.mode = 'approach'; }
       }
       break;
+    case 'stomp': {                // fed up: stop, stamp, then carry on with whatever the light now says
+      if (!S.from) { if (!halt(dt)) { S.t = 0; break; } S.from = { ...fig.pose }; S.t = 0; }
+      const n = S.stomps > 1 ? 4 : 3;
+      fig.pose = stompPose(Math.min(S.t, stompDur(n)), n, S.from);
+      if (S.t >= stompDur(n)) { fig.pose = { ...POSES.stand }; S.from = null; S.flips = []; S.mode = on ? 'approach' : 'home'; S.t = 0; }
+      break;
+    }
     case 'home':                   // lamp off: walk back slowly in the dark and sit down
       if (!goTo(FRONT_X, dt, 'trudge')) break;
       if (!turnTo(1)) break;
@@ -1185,6 +1235,9 @@ function setOn(v, source) {
   if (source === 'kick') tiltVel += 9;
   else if (source !== 'drag') tiltVel += on ? -5 : 5;
   if (!rig.ready) return;
+  // turning her round mid-walk (to the switch / back to the chair) counts towards losing her temper;
+  // the giving-up walk and sulking don't: then she is past caring
+  const reverses = on ? S.mode === 'home' : ['notice', 'approach'].includes(S.mode);
   if (!on) {
     // in the dark she heads back to her chair; if she is already sitting, she stays put
     // (a kick or push in progress finishes first: afterKick sends her home)
@@ -1192,6 +1245,11 @@ function setOn(v, source) {
   } else {
     // lamp back on: get up, or stop walking home and come back
     if (S.mode === 'home' || S.mode === 'giveupWalk') { newAttempt(); S.mode = 'approach'; }
+  }
+  if (reverses) {
+    S.flips = S.flips.filter(c => S.clock - c < ANGER.within).concat(S.clock);
+    // she loses her temper on a flip that brings the light back: a tantrum in the dark would go unseen
+    if (on && S.flips.length >= ANGER.flips) { S.stomps++; S.mode = 'stomp'; S.t = 0; S.from = null; }
   }
 }
 addEventListener('keydown', e => {

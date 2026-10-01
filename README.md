@@ -18,7 +18,7 @@ This project only re-creates the piece as an homage. The idea, the interaction a
 - **Click the pedestal** to zoom between the close-up and the whole room.
 - **Space** flips the switch. **Enter** zooms.
 
-She has a mind of her own. She takes a moment before getting up, sometimes leans on the lever with her foot instead of kicking it, sulks with her head (or chin) in her hands when she gives up, and occasionally jumps up and dashes at the switch just to see what you'll do. If the lamp goes off she walks back to her chair in the dark; turn it back on mid-walk and you'll catch her.
+She has a mind of her own. She takes a moment before getting up, sometimes leans on the lever with her foot instead of kicking it, sulks with her head (or chin) in her hands when she gives up, and occasionally jumps up and dashes at the switch just to see what you'll do. If the lamp goes off she walks back to her chair in the dark; turn it back on mid-walk and you'll catch her. Keep flipping it while she walks back and forth and she'll stop and stamp her feet.
 
 ## Screenshots
 
