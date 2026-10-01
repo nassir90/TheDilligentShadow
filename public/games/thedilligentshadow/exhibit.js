@@ -479,6 +479,8 @@ function applyFigure(dt) {
   else aimDir('Torso', 'Neck', up(p.lean));
   aimDir('Neck', 'Head', up(p.lean + p.nod * 0.5));
   aimDir('Head', 'Head_end', up(p.lean + p.nod));
+  // how far her hips are bent (0 standing, 1 seated): the cloak lets go of her lower back as she sits
+  rig.hipFlex = ss(((p.thighA + p.thighB) / 2 - 0.45) / 0.8);
   // legs: thigh toward the knee, shin toward the ankle, then the foot bone placed on the ankle with its pitch
   // The pose's angles say where each ankle goes (relative to the ideal hip point); the leg is then solved in 3D
   // from her real hip joint to exactly that ankle, so feet land where the gait puts them.
@@ -587,11 +589,13 @@ class Cloth {
           for (const [A, B, r] of caps) this.pushCapsule(q, A, B, r);
           for (const [C, r] of spheres) this.pushSphere(q, C, r);
           if (P[q + 1] < -0.002) P[q + 1] = -0.002;
+          if (this.seat) this.seatPush(q);
         }
       }
       if (holdCur) this.hold.forEach((h, j) => {      // upper rows held on her back, firmest at the shoulders
         const A = this.lastHold[j], B = holdCur[j];
-        for (let c = 0; c < 3; c++) P[h.q + c] = lerp(P[h.q + c], lerp(A[c], B[c], k), h.w);
+        const w = h.low ? h.w * (1 - rig.hipFlex) : h.w;
+        if (w > 0.001) for (let c = 0; c < 3; c++) P[h.q + c] = lerp(P[h.q + c], lerp(A[c], B[c], k), w);
       });
     }
     this.lastA = cur; this.lastHold = holdCur;
@@ -614,6 +618,13 @@ class Cloth {
     const cx = A.x + abx * t, cy = A.y + aby * t, cz = A.z + abz * t;
     const dx = P[k] - cx, dy = P[k + 1] - cy, dz = P[k + 2] - cz, d = Math.hypot(dx, dy, dz);
     if (d < r && d > 1e-6) { const s = (d + (r - d) * this.soft) / d; P[k] = cx + dx * s; P[k + 1] = cy + dy * s; P[k + 2] = cz + dz * s; }
+  }
+  // the chair seat: cloth that sinks into it comes back up onto its top
+  seatPush(q) {
+    const P = this.pts, s = rig.seat;
+    if (!s || P[q] < s.back || P[q] > s.front || Math.abs(P[q + 2]) > s.half) return;
+    const top = SEAT_Y + 0.003;
+    if (P[q + 1] < top && P[q + 1] > SEAT_Y - 0.09) P[q + 1] = lerp(P[q + 1], top, this.soft < 1 ? 0.6 : 1);
   }
   pushSphere(k, C, r) {
     const P = this.pts, dx = P[k] - C.x, dy = P[k + 1] - C.y, dz = P[k + 2] - C.z, d = Math.hypot(dx, dy, dz);
@@ -696,7 +707,7 @@ const hair = new Cloth({
 // The top edge sits on her skin (measured from the mesh); down to the waist the cloth is held onto her back,
 // below it hangs free and swings.
 const cloak = new Cloth({
-  bone: 'Chest', N: 15, M: 19, len: 0.34, closed: false, spread: 0.09, drag: 2.4, bend: 0.55, soft: 0.3,   // legs ease the cloth aside instead of shoving it
+  bone: 'Chest', N: 15, M: 19, len: 0.34, closed: false, spread: 0.09, drag: 2.4, bend: 0.55, soft: 0.3, seat: true,   // legs ease the cloth aside instead of shoving it
   dirs() { return Array.from({ length: this.N }, (_, i) => { const t = lerp(-1.75, 1.75, i / (this.N - 1)); return [Math.sin(t), -Math.cos(t)]; }); },
   anchorsLocal() {
     // the top edge: pinned to the skin vertices round the back of her neck and over her shoulders
@@ -715,7 +726,8 @@ const cloak = new Cloth({
         const w = ss((y - (rig.hipRestY - 0.012)) / 0.05);
         if (w <= 0.01) break;
         const { vert } = surfaceAt(y, dx, dz, maxLat);
-        if (vert) this.hold.push({ q: (l * this.N + i) * 3, dx, dz, vert, w });
+        // rows below the small of her back let go as her hips bend, so the cloak drapes over her bottom and the seat
+        if (vert) this.hold.push({ q: (l * this.N + i) * 3, dx, dz, vert, w, low: y < rig.waistY + 0.03 });
       }
     });
     this.waistR = surfaceAt(rig.waistY, 0, -1).s + CLOAK_GAP;
@@ -927,7 +939,7 @@ function initFigureConstants() {
       v.fromBufferAttribute(pos, i); stageG.worldToLocal(chair.localToWorld(v));
       if (Math.abs(v.y - SEAT_Y) < 0.006) { front = Math.max(front, v.x); back = Math.min(back, v.x); }
     }
-    rig.seat = { front, back };
+    rig.seat = { front, back, half: 0.32 * FIG_H / PERSON_H };   // the real chair is ~0.64 m wide
     SIT_X = lerp(back, front, 0.42);
   }
   FRONT_X = SIT_X + L1;               // standing in front of the seat: where her feet stay while she sits
@@ -993,6 +1005,9 @@ function kickPose(u, held) {
 const PUSH = { dx: 0.03, kickAnkle: [0, 0], supAnkle: [0, 0] };
 // the lingering push: the foot stays on the lever and leans into it in slow pulses, toes curling, arms bracing
 let pushForce = 0;      // 0..1, read by the lever (strain) and the visitor's hand (finger flex)
+let kickAge = 9;        // seconds since a kick landed on the held lever; a brief jolt the visitor's finger feels
+const kickJolt = () => kickAge < 0.03 ? kickAge / 0.03 : Math.exp(-(kickAge - 0.03) / 0.07);
+const strain = () => Math.max(pushForce, 0.8 * kickJolt());
 // Both feet stay put (the support foot flat, the kicking toe on the lever); she shifts her hips in toward the
 // switch so the kicking knee bends, and each pulse leans a little further in.
 function pushLegs(dx) {
@@ -1090,7 +1105,7 @@ function stepFigure(dt, t) {
       if (u < 0.3) blend(kp, 1 - Math.pow(1e-6, dt)); else fig.pose = kp;
       if (!S.hit && u >= KICK.contact) {
         S.hit = true;
-        if (on && !dragging) setOn(false, 'kick'); else S.fails++;
+        if (on && !dragging) setOn(false, 'kick'); else { S.fails++; if (dragging) kickAge = 0; }
       }
       if (u >= 1 && S.mode === 'kick') afterKick();
       break;
@@ -1220,8 +1235,8 @@ function poseHand(t) {
   // index: slack bends so it can straighten; last joint bends back when pressing on the lever
   bend('index-finger-phalanx-proximal', (22 + 8 * (1 - press)) * DEG);
   bend('index-finger-phalanx-intermediate', (20 - 6 * press) * DEG);
-  bend('index-finger-phalanx-distal', (8 - 22 * press - 16 * pushForce) * DEG);
-  bend('index-finger-phalanx-intermediate', (20 - 6 * press + 9 * pushForce) * DEG);
+  bend('index-finger-phalanx-distal', (8 - 22 * press - 16 * strain()) * DEG);
+  bend('index-finger-phalanx-intermediate', (20 - 6 * press + 9 * strain()) * DEG);
   const curl = (f, a, b, c, j) => {
     bend(`${f}-finger-phalanx-proximal`, a * DEG + j + breathe);
     bend(`${f}-finger-phalanx-intermediate`, b * DEG + j * 0.8 + breathe);
@@ -1444,6 +1459,9 @@ renderer.domElement.addEventListener('pointercancel', endDrag);
 renderer.domElement.addEventListener('pointerleave', () => { pointerIn = false; hoverSwitch = false; if (!dragging) renderer.domElement.style.cursor = ''; });
 
 const hoverPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(PLINTH.h + 0.055));
+// the hand roams a little in front of and behind the switch; reach past that, into the room, and it rises into the air
+const REACH = { front: SW.z + 0.22, back: SW.z - 0.14, x: 0.42, top: PLINTH.h + 0.9 };
+const reachPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -REACH.back);
 const hit = new THREE.Vector3();
 function aimHand() {
   if (dragging || hoverSwitch) {
@@ -1453,9 +1471,11 @@ function aimHand() {
     return;
   }
   ray.setFromCamera(ptr, camera);
-  const ok = pointerIn && ray.ray.intersectPlane(hoverPlane, hit);
-  if (ok && Math.abs(hit.x - SW.x) < 0.42 && hit.z > PLINTH.z - 0.45 && hit.z < PLINTH.z + 0.75) {
-    hand.target.copy(hit); hand.want = 1;
+  let ok = pointerIn && ray.ray.intersectPlane(hoverPlane, hit);
+  // behind the switch (or above the horizon): follow the pointer up a vertical plane instead of across the plinth
+  if (pointerIn && (!ok || hit.z < REACH.back)) ok = ray.ray.intersectPlane(reachPlane, hit) && hit.y >= PLINTH.h + 0.045;
+  if (ok && Math.abs(hit.x - SW.x) < REACH.x && hit.y < REACH.top && hit.z < PLINTH.z + 0.75) {
+    hand.target.copy(hit); hand.target.z = Math.min(hit.z, REACH.front); hand.want = 1;
   } else hand.want = 0;
 }
 
@@ -1577,6 +1597,7 @@ const creditFX = (() => {
 // ---------- loop ----------
 const clock = new THREE.Clock();
 function frame(dt, t) {
+  kickAge += dt;
   if (!dragging) {
     const rest = on ? -SW.maxTilt : SW.maxTilt;
     tiltVel += (rest - tilt) * 320 * dt - tiltVel * 20 * dt;
@@ -1584,7 +1605,7 @@ function frame(dt, t) {
     if (reduced) { tilt = rest; tiltVel = 0; }
   }
   // while she leans on a held lever it strains a little toward off
-  leverPivot.rotation.z = -(tilt + (dragging ? 0.035 * pushForce : 0));
+  leverPivot.rotation.z = -(tilt + (dragging ? 0.035 * strain() : 0));
 
   lampLevel += ((on ? 1 : 0) - lampLevel) * (1 - Math.pow(on ? 0.0005 : 1e-8, dt));
   lamp.intensity = 2.2 * lampLevel;
