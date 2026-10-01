@@ -619,12 +619,16 @@ class Cloth {
     const dx = P[k] - cx, dy = P[k + 1] - cy, dz = P[k + 2] - cz, d = Math.hypot(dx, dy, dz);
     if (d < r && d > 1e-6) { const s = (d + (r - d) * this.soft) / d; P[k] = cx + dx * s; P[k + 1] = cy + dy * s; P[k + 2] = cz + dz * s; }
   }
-  // the chair seat: cloth that sinks into it comes back up onto its top
+  // the chair seat: cloth that comes down onto it stays on its top. The contact is dead (no bounce) and grippy
+  // (it kills sliding), and only catches cloth arriving from above, so the hem hanging past the seat's edge is never
+  // yanked up onto it.
   seatPush(q) {
-    const P = this.pts, s = rig.seat;
-    if (!s || P[q] < s.back || P[q] > s.front || Math.abs(P[q + 2]) > s.half) return;
-    const top = SEAT_Y + 0.003;
-    if (P[q + 1] < top && P[q + 1] > SEAT_Y - 0.09) P[q + 1] = lerp(P[q + 1], top, this.soft < 1 ? 0.6 : 1);
+    const P = this.pts, Q = this.prev, s = rig.seat, top = SEAT_Y + 0.003;
+    const m = Math.abs(Q[q + 1] - top) < 0.001 ? 0.008 : 0;   // cloth already resting on the seat keeps hold of its edges
+    if (!s || P[q] < s.back - m || P[q] > s.front + m || Math.abs(P[q + 2]) > s.half + m) return;
+    if (P[q + 1] >= top || Q[q + 1] < SEAT_Y - 0.01) return;
+    P[q + 1] = top; Q[q + 1] = top;
+    Q[q] = lerp(Q[q], P[q], 0.6); Q[q + 2] = lerp(Q[q + 2], P[q + 2], 0.6);
   }
   pushSphere(k, C, r) {
     const P = this.pts, dx = P[k] - C.x, dy = P[k + 1] - C.y, dz = P[k + 2] - C.z, d = Math.hypot(dx, dy, dz);
