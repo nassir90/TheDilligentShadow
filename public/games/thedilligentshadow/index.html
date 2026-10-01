@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Diligent Shadow</title>
+<meta name="description" content="A WebGL re-creation of Koya Endo's interactive installation The Diligent Shadow (Tokyo Prototype 2026). Flip the switch on; the shadow kicks it back off.">
+
+<!--
+  A WebGL re-creation of Koya Endo's installation "The Diligent Shadow" (Tokyo Prototype 2026).
+  Hand: WebXR Input Profiles generic hand, MIT licence, (c) 2019 Amazon (licence in assets/LICENSE-webxr-hand.md).
+  Figure: "Animated Woman" by Quaternius, CC0. Chair: "Painted Wooden Chair 02" by Kirill Sannikov, Poly Haven, CC0.
+-->
+<style>
+/* Layout: the room fills the screen with no chrome; one line of credit floats at the bottom, inked black or white per pixel by a shader. */
+:root {
+  --wall: #16171a;   /* room, dark-first single look */
+  --text: #ffffff;
+  --serif: "Times New Roman", Times, serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; }
+body { background: var(--wall); color: var(--text); overflow: hidden; }
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(0,0,0,.55) 100%); }
+
+#credit {
+  position: fixed; left: 16px; right: 16px;
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  margin: 0; text-align: center;
+  font: 400 17px/1.4 var(--serif); letter-spacing: 0.02em;
+  /* the visible glyphs are drawn by a shader pass (black or white per pixel, from what's behind);
+     this text stays transparent so the link works and the line can be read and selected */
+  color: transparent;
+  pointer-events: none;
+}
+#credit .sep { padding: 0 0.6em; opacity: .7; }
+#credit a { color: inherit; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; pointer-events: auto; }
+#credit a:focus-visible { outline: 1px dashed #808080; outline-offset: 3px; }
+</style>
+
+</head>
+<body>
+<div id="stage"></div>
+<div class="vignette"></div>
+
+<p id="credit">The Diligent Shadow<span class="sep">&middot;</span>Tokyo Prototype 2026<span class="sep">&middot;</span><a href="https://www.instagram.com/reel/DdJPF6HNMod/" target="_blank" rel="noopener">Source</a></p>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="assets/right-hand.js"></script>
+<script src="assets/figure-woman.js"></script>
+<script src="assets/chair.js"></script>
+<script src="exhibit.js"></script>
+</body>
+</html>
