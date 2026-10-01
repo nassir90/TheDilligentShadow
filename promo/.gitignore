@@ -1,0 +1,7 @@
+vo*.wav
+vo*.json
+frames/
+*.mp4
+audio.wav
+sfx_*.wav
+events.json
