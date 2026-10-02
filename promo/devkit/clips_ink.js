@@ -89,4 +89,69 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
         } }; })(),
     ],
   };
+
+  // ---- shared bits for the cloak, hair and hand videos ----
+  const wave = (t, p = 5) => 0.5 - 0.5 * Math.cos(t / p * Math.PI * 2);
+  const fixedAt = o => { let at = null; return (t, H) => { if (!at) { at = H.bonePos(o.bone || 'Hips'); at.x += o.dxAt || 0; at.y += o.lookY || 0; } return { pos: at.clone().add(V(o.dx, o.dy, o.dz)), at, fov: o.fov || 40 }; }; };
+  const seatedTall = () => fixedAt({ dx: 0.46, dy: 0.04, dz: 0.66, fov: 46, lookY: -0.05, dxAt: -0.01 });
+  const seatedHalf = () => fixedAt({ dx: 0.38, dy: 0.05, dz: 0.5, fov: 36, lookY: -0.05, dxAt: -0.02 });
+  const bootBefore = H => { H.lights(true); H.hold(false); H.seat(); S.minSit = 999; S.wait = 999; cloak.lastA = null; hair.lastA = null; };
+  const bootAfter = H => { H.lights(true); H.hold(false); H.seat(); S.minSit = 999; S.wait = 999; settleCloth(); };
+  // cloak points that moved more than 2 mm in a frame (a "pop"): dots on each, and a callout counting them
+  function pops() {
+    let last = null;
+    return (g, t, P, H, m) => {
+      const Pt = cloak.pts, out = [];
+      if (last) for (let i = 0; i < Pt.length; i += 3) if (Math.hypot(Pt[i] - last[i], Pt[i + 1] - last[i + 1], Pt[i + 2] - last[i + 2]) > 0.002) out.push(i);
+      last = Float32Array.from(Pt);
+      const ann = out.map(i => { const [x, y] = P(stageG.localToWorld(V(Pt[i], Pt[i + 1], Pt[i + 2]))); return { k: 'dot', x, y, r: 7 }; });
+      const seat = P(stageG.localToWorld(V((rig.seat.front + rig.seat.back) / 2 + 0.02, SEAT_Y, 0)));
+      ann.push({ k: 'call', id: 'pops', x: seat[0], y: seat[1], r: 40, dx: 200, dy: -330, text: out.length ? `${out.length} popping` : 'still' });
+      m.ann = ann; m.pops = out.length;
+    };
+  }
+  const hairTall = (t, H) => { const h = H.bonePos('Head'); return { pos: h.clone().add(V(0.26, 0.0, 0.36)), at: h.clone().add(V(-0.025, -0.06, 0)), fov: 44 }; };
+  const hairHalf = (t, H) => { const h = H.bonePos('Head'); return { pos: h.clone().add(V(0.2, 0.02, 0.26)), at: h.clone().add(V(-0.025, -0.03, 0)), fov: 32 }; };
+  const noisy = () => { let s = 3; return () => { s = (s * 16807) % 2147483647; return 1 / 30 * (0.55 + 0.9 * (s / 2147483647)); }; };
+  const standStill = H => { H.lights(true); H.hold(true); H.stand(-0.45, 1); S.mode = 'stare'; S.t = 0; S.dur = 99; };
+  const plinthTall = (u = 0) => ({ pos: V(SW.x + 0.05, PLINTH.h + 0.3, SW.z + 0.58 - 0.05 * u), at: V(SW.x + 0.03, PLINTH.h + 0.0, SW.z - 0.02), fov: 50 });
+  const lissajous = (t, sp = 1) => V(SW.x + 0.11 * Math.sin(t * 1.1 * sp), PLINTH.h + 0.07 + 0.03 * Math.sin(t * 1.7 * sp + 1), SW.z + 0.06 * Math.sin(t * 0.8 * sp + 2));
+  const seatedQuiet = H => { H.lights(true); H.hold(false); H.seat(); S.minSit = 999; S.wait = 999; };
+  const heldKicks = H => { H.lights(true); H.stand(STRIKE.x, 1); H.hold(true); S.mode = 'kick'; S.t = -0.2; S.hit = false; S.fails = 1; S.patience = 99; };
+
+  Object.assign(window.CLIPS_INK, {
+    '03-cloak-old': [
+      { name: 'ic_boot_before', w: 1080, h: 1920, dur: 5, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootBefore, cam: seatedTall() },
+      { name: 'ic_boot_before_half', w: 1080, h: 960, dur: 5, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootBefore, cam: seatedHalf() },
+      { name: 'ic_pops_before', w: 1080, h: 1920, dur: 11, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootBefore, cam: seatedTall(), overlay: pops() },
+      { name: 'ic_pops_before_half', w: 1080, h: 960, dur: 9, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootBefore, cam: seatedHalf(), overlay: pops() },
+    ],
+    '03-cloak': [
+      { name: 'ic_boot_after_half', w: 1080, h: 960, dur: 5, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootAfter, cam: seatedHalf() },
+      { name: 'ic_pops_after', w: 1080, h: 1920, dur: 12, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootAfter, cam: seatedTall(), overlay: pops() },
+      { name: 'ic_pops_after_half', w: 1080, h: 960, dur: 9, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootAfter, cam: seatedHalf(), overlay: pops() },
+      { name: 'ic_preroll', w: 1080, h: 1920, dur: 7, wire: 1, wireTags: ['cloak', 'chair', 'figure'],
+        setup: H => { H.lights(true); H.hold(false); S.minSit = 999; S.wait = 999; S.mode = 'rest'; rig.upper = null; const { x, pose } = sitPose(0, POSES.sitRest); fig.x = x; fig.pose = pose; fig.face = 1; rig.yaw = Math.PI / 2; applyFigure(1 / 60); hair.lastA = cloak.lastA = null; },
+        manual(t) { const u = clamp((t - 1.0) / 2.4, 0, 1); for (let i = 0; i < 2; i++) { const { x, pose } = sitPose(u, POSES.sitRest); fig.x = x; fig.pose = pose; applyFigure(1 / 60); hair.step(1 / 60); cloak.step(1 / 60); } },
+        cam: fixedAt({ dx: 0.75, dy: 0.0, dz: 0.95, fov: 46, lookY: -0.1, dxAt: 0.08 }),
+        overlay(g, t, P, H, m) { const [x, y] = P(H.bonePos('Hips')); m.ann = [{ k: 'call', id: 'phase', x, y, r: 40, dx: 230, dy: -300, text: t < 1 ? 'stand, let it hang' : t < 3.4 ? 'sit down' : 'settle' }]; } },
+    ],
+    '04-hair': [
+      { name: 'ih_wire', w: 1080, h: 1920, dur: 12, hide: ['cloak'], solid: t => wave(t, 4) < 0.5, wire: t => 0.35 + 0.65 * wave(t, 4), wireTags: ['hair', 'figure'], setup: H => { H.lights(true); H.hold(true); H.stand(FRONT_X, 1); S.mode = 'approach'; S.t = 0; S.patience = 99; }, cam: hairTall },
+      ...[['before', ['rawCloth']], ['after', []]].flatMap(([k, mods]) => [
+        { name: `ih_${k}`, w: 1080, h: 960, dur: 9, hide: ['cloak'], solid: true, mods, dtAt: noisy(), wire: 1, wireTags: ['hair'], setup: standStill, cam: hairHalf },
+        { name: `ih_${k}_tall`, w: 1080, h: 1920, dur: 10, hide: ['cloak'], solid: true, mods, dtAt: noisy(), wire: 1, wireTags: ['hair'], setup: standStill, cam: hairTall },
+      ]),
+    ],
+    '05-hand': [
+      { name: 'iha_wire', w: 1080, h: 1920, dur: 10, wire: t => wave(t, 3.5), wireTags: ['hand'], setup: seatedQuiet, handPath: t => lissajous(t, 0.6), cam: () => plinthTall() },
+      { name: 'iha_springs', w: 1080, h: 1920, dur: 14, setup: seatedQuiet, handPath: t => lissajous(t, 1.9), cam: () => plinthTall(0.5),
+        overlay(g, t, P, H, m) { const [x, y] = P(hand.target); m.ann = [{ k: 'call', id: 'target', x, y, r: 30, dx: -230, dy: -200, text: 'where it’s sent' }]; } },
+      { name: 'iha_dent', w: 1080, h: 1920, dur: 9, setup: heldKicks,
+        cam: t => { const tip = leverTipWorld(V()); return { pos: tip.clone().add(V(-0.14 + 0.012 * t / 8, 0.05, 0.19)), at: tip.clone().add(V(0.01, -0.025, 0)), fov: 42 }; } },
+      { name: 'iha_fade', w: 1080, h: 1920, dur: 8, setup: seatedQuiet, handPath: t => lissajous(t, 0.5),
+        cam: () => ({ pos: V(SW.x - 0.34, PLINTH.h + 0.17, SW.z + 0.32), at: V(SW.x + 0.04, PLINTH.h + 0.0, SW.z), fov: 50 }),
+        overlay(g, t, P, H, m) { if (hand.alpha < 0.5) { m.ann = []; return; } const [x, y] = P(hand.bones.wrist.getWorldPosition(V())); m.ann = [{ k: 'call', id: 'wrist', x, y, r: 36, dx: 200, dy: -230, text: 'fades out' }]; } },
+    ],
+  });
 })();

@@ -121,6 +121,7 @@
     mods(o.mods); H_._lastCloak = null; cloak._j1 = cloak._j2 = hair._j1 = hair._j2 = null;
     handPath = o.handPath ? () => o.handPath(REC.t, H_) : null; REC.t = 0;
     o.setup?.(H_);
+    const hidden = (o.hide || []).map(k => ({ cloak: cloak.mesh, hair: hair.mesh })[k]).filter(Boolean); hidden.forEach(m => m.visible = false);
     if (o.prerun) for (let i = 0; i < Math.round(o.prerun * 60); i++) { o.preUpdate?.(i / 60, H_); sim(1 / 60); }
     const gl = renderer.getContext(), px = new Uint8Array(W * Hh * 4);
     const out = document.createElement('canvas'); out.width = W; out.height = Hh; const g = out.getContext('2d');
@@ -151,7 +152,7 @@
     }
     if (batch.length) await fetch(`${SINK}/batch`, { method: 'POST', body: batch.join('\n') });
     await fetch(`${SINK}/clips/${o.name}/meta.json`, { method: 'POST', body: JSON.stringify({ fps, w: W, h: Hh, frames: meta }) });
-    mods([]); solid(false); handPath = null; renderer.render = draw;
+    mods([]); solid(false); handPath = null; renderer.render = draw; hidden.forEach(m => m.visible = true);
     REC.status.done = true;
   }
   // run a list of clip definitions one after another (in the background); poll REC.status / REC.queue

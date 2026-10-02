@@ -185,8 +185,10 @@ function inkStack(rows, top, alpha) {
 function inkTitle(E, t) {
   const T = E.titleCard; if (!T) return;
   const a = ease(t / 0.6) * (1 - ease((t - (T.hold || 3.2)) / 0.9)); if (a <= 0) return;
+  // a title too wide for the frame wraps onto a second line
+  ig.save(); ig.font = `400 112px ${SERIF}`; const tl = wrap(ig, T.title, W - 120); ig.restore();
   inkStack([{ text: T.kicker || '', font: `italic 400 40px ${SERIF}`, size: 40, group: 'title.kicker', gap: 0.5 },
-    { text: T.title, font: `400 112px ${SERIF}`, size: 112, group: 'title' }], T.top ?? 210, a);
+    ...tl.map((l, i) => ({ text: l, font: `400 112px ${SERIF}`, size: 112, group: 'title', gap: 0.2 }))], T.top ?? 210, a);
 }
 function inkStat(L, tl) {
   const k = ease((tl - (L.delay || 0.4)) / (L.count || 1.2)), v = L.from + (L.to - L.from) * k;
@@ -222,6 +224,31 @@ function plainCode(g, L, tl, bottom) {
     if (piece.length || i === 0) { cx = x + pad + g.measureText(piece).width; cy = yy; }
   });
   if (reveal < 1 && Math.floor(tl * 3) % 2 === 0) g.fillRect(cx + 3, cy - size * 0.72, 2, size * 0.9);
+  g.restore();
+}
+// a graph in the same plain style: a translucent black box, white lines (solid, then dashed), Times New Roman labels;
+// it sits just above the subtitles, like the code
+function plainGraph(g, L, tl, bottom) {
+  const x = 48, w = W - 96, h = L.h || 470, y = L.y ?? (bottom - h), a = ease(tl / 0.3);
+  const ser = L.series.map(sr => sr.data || clips[sr.clip].meta.frames.slice(Math.round((sr.from || 0) * 30), Math.round(((sr.from || 0) + L.dur) * 30)).map(m => sr.f(m)));
+  const ym = L.ymax || Math.max(...ser.flat()) * 1.1 || 1;
+  g.save(); g.globalAlpha = a * 0.84; g.fillStyle = '#000'; g.fillRect(x, y, w, h); g.globalAlpha = a;
+  BOXES.push({ group: 'graph', x0: x, x1: x + w, y0: y, y1: y + h, size: 30, text: 'graph box' });
+  g.fillStyle = '#fff'; g.strokeStyle = '#fff'; g.font = `400 34px ${SERIF}`; g.fillText(L.title, x + 30, y + 52);
+  const px = x + 96, py = y + 90, pw = w - 130, ph = h - 170;
+  g.font = `400 24px ${MONO}`; g.globalAlpha = a * 0.6; g.lineWidth = 1;
+  for (let k = 0; k <= 2; k++) { const yy = py + ph - ph * k / 2; g.beginPath(); g.moveTo(px, yy); g.lineTo(px + pw, yy); g.stroke(); g.fillText(String(+(ym * k / 2).toPrecision(2)), x + 22, yy + 8); }
+  g.fillText(L.unit || '', x + 22, py - 22); g.fillText(`${L.dur} s`, px + pw - 50, py + ph + 36);
+  g.globalAlpha = a;
+  const prog = clamp((tl - 0.3) / (L.revealDur || 2.5), 0, 1);
+  ser.forEach((d, si) => {
+    const n = Math.max(1, Math.floor(d.length * prog));
+    g.lineWidth = 4; g.setLineDash(si ? [14, 10] : []); g.beginPath();
+    for (let i = 0; i < n; i++) { const xx = px + pw * i / (d.length - 1), yy = py + ph - ph * clamp(d[i] / ym, 0, 1); i ? g.lineTo(xx, yy) : g.moveTo(xx, yy); }
+    g.stroke();
+    const lx = px + si * pw / 2, ly = y + h - 30; g.beginPath(); g.moveTo(lx, ly - 10); g.lineTo(lx + 50, ly - 10); g.stroke(); g.setLineDash([]);
+    g.font = `400 30px ${SERIF}`; g.fillText(L.series[si].label, lx + 64, ly);
+  });
   g.restore();
 }
 function pill(g, text, x, y, color, size = 30) {
@@ -443,7 +470,7 @@ async function run(id, opts = {}) {
       if (L.type === 'clip') await drawClipLayer(g, L, tl);
       else if (L.type === 'split') { await drawClipLayer(g, L.a, tl, [0, L.top ?? 0, W, (L.h ?? 960)]); await drawClipLayer(g, L.b, tl, [0, (L.top ?? 0) + (L.h ?? 960), W, (L.h ?? 960)]); if (STYLE !== 'ink') { g.fillStyle = '#0b0c0f'; g.fillRect(0, (L.top ?? 0) + (L.h ?? 960) - 3, W, 6); } }
       else if (L.type === 'code') { if (STYLE === 'ink') { L._code = true; } else code(g, L, tl); }
-      else if (L.type === 'graph') graph(g, L, tl);
+      else if (L.type === 'graph') { if (STYLE === 'ink') L._graph = true; else graph(g, L, tl); }
       else if (L.type === 'text') textLayer(g, L, tl);
       else if (L.type === 'stat') { if (STYLE === 'ink') inkStat(L, tl); else bigStat(g, L, tl); }
       else if (L.type === 'end') endCard(g, L, tl);
@@ -461,7 +488,7 @@ async function run(id, opts = {}) {
       applyInk(g);
       const subs = TL.cues.filter(c => c.text && c.at < s.t0 + s.dur && c.at + (c.b - c.a) + 0.45 > s.t0);
       const bottom = (subs.length ? Math.min(...subs.map(c => subTop(c.text))) : H - 60) - 48;   // just clear of the subtitles
-      for (const L of s.layers || []) { for (const r of [L, L.a, L.b]) if (r && r._cut) { cutLabel(g, ...r._cut); r._cut = null; } if (L._code) plainCode(g, L, tl, bottom); }
+      for (const L of s.layers || []) { for (const r of [L, L.a, L.b]) if (r && r._cut) { cutLabel(g, ...r._cut); r._cut = null; } if (L._code) plainCode(g, L, tl, bottom); if (L._graph) plainGraph(g, L, tl, bottom); }
       crowding(t);
     } else {
       header(g, E);
