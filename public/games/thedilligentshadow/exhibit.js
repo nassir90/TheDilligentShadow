@@ -548,6 +548,87 @@ function applyFigure(dt) {
     const d2 = L(out * 0.5, -Math.cos(ua + fa), Math.sin(ua + fa)).sub(L(0, 0, 0)).normalize();
     aimBone(bn('LowerArm.' + side), bn(HAND + '.' + side), el.clone().addScaledVector(d2, FA));
   }
+  poseFingers(dt, rig.wob ? rig.wob.t : 0);
+}
+
+// ---------- fingers ----------
+// The rig has full hands (a palm bone and three phalanges per finger, three thumb bones), all skinned. Each joint
+// bends about its own curl axis, found once from the rest pose: across the finger, in the plane of the palm.
+// One "grip" value per hand (0 open … 1 fist) sets the curl, cascading from index to little finger, and is eased
+// toward a target set by what she is doing; each finger then lags on its own spring when the wrist moves, like
+// the visitor's hand, with a slow fidget so the hands are never quite still.
+const FINGERS = ['Index', 'Middle', 'Ring', 'Pinky'];
+const FCURL = { palm: [0, 0, 0.12, 0.22], joints: [1.45, 1.7, 1.05], cascade: [0.88, 1, 1.06, 1.14], spread: [-0.16, -0.04, 0.06, 0.16] };
+function fingerAxes(side) {
+  const P = n => bn(n).getWorldPosition(new THREE.Vector3()), q = new THREE.Quaternion();
+  const toLocal = (b, v) => v.clone().applyQuaternion(bn(b).getWorldQuaternion(q).invert()).normalize();
+  // palm normal (toward the palm side): across the knuckles × along the hand, flipped so the thumb tip lies on it
+  const along = P(`Middle2.${side}`).sub(P(`Wrist.${side}`)).normalize();
+  const across = P(`Index2.${side}`).sub(P(`Pinky2.${side}`)).normalize();
+  let n = new THREE.Vector3().crossVectors(across, along).normalize();
+  if (P(`Thumb3.${side}`).sub(P(`Wrist.${side}`)).dot(n) < 0) n.negate();
+  const ax = { n };
+  for (const f of FINGERS) for (let j = 1; j <= 4; j++) {
+    const b = `${f}${j}.${side}`, c = j < 4 ? `${f}${j + 1}.${side}` : `${f}4${side}_end`;
+    const d = (bn(c) ? P(c) : P(b).add(P(b).sub(P(`${f}${j - 1}.${side}`)))).sub(P(b)).normalize();
+    // rotating about d × n swings the finger's far end toward n, into the palm
+    ax[b] = { curl: toLocal(b, new THREE.Vector3().crossVectors(d, n)), spread: toLocal(b, n) };
+  }
+  for (let j = 1; j <= 3; j++) {
+    const b = `Thumb${j}.${side}`, c = j < 3 ? `Thumb${j + 1}.${side}` : null;
+    const d = (c ? P(c) : P(b).add(P(b).sub(P(`Thumb${j - 1}.${side}`)))).sub(P(b)).normalize();
+    // the thumb folds across the palm toward the little finger
+    const toPinky = P(`Pinky2.${side}`).sub(P(b)).normalize();
+    ax[b] = { curl: toLocal(b, new THREE.Vector3().crossVectors(d, toPinky).normalize()) };
+  }
+  return ax;
+}
+function gripFor() {   // [grip, spread] for what she is doing
+  const m = S.mode;
+  if (m === 'stomp') return [1.0, -0.2];
+  if (m === 'kick') return S.t / KICK.dur > 0.35 && S.t / KICK.dur < KICK.release ? [0.12, 0.9] : [0.3, 0.3];
+  if (m === 'push') return [0.22, 0.6];
+  if (m === 'fakeRun') return [0.62, 0];
+  if (m === 'home' || m === 'giveupWalk') return [0.5, 0];
+  if (m === 'sulk' || (m === 'sitting' && seatedPose && seatedPose !== 'sitRest' && S.sit.dir > 0)) return seatedPose === 'chinInHands' ? [0.58, 0.1] : [0.2, 0.55];
+  if (m === 'rest' || m === 'sitting') return [0.42, 0.1];
+  if (m === 'stare') return [0.4, 0];
+  return [0.34, 0.15];
+}
+function poseFingers(dt, t) {
+  const F = rig.fingers || (rig.fingers = { R: null, L: null });
+  const [g, sp] = gripFor();
+  for (const side of ['R', 'L']) {
+    if (!F[side]) F[side] = { ax: fingerAxes(side), grip: { x: g, v: 0 }, spread: { x: sp, v: 0 }, lag: FINGERS.map(() => new Spring()),
+      last: null, sv: new THREE.Vector3(), lsv: new THREE.Vector3() };
+    const h = F[side], ax = h.ax;
+    if (dt > 0) {
+      h.grip.x = smoothDamp(h.grip.x, g, h.grip, 0.22, dt);
+      h.spread.x = smoothDamp(h.spread.x, sp, h.spread, 0.25, dt);
+      // the wrist's smoothed acceleration toward the back of the hand flicks the fingers open a little, then they settle
+      const w = bn(`Wrist.${side}`).getWorldPosition(new THREE.Vector3());
+      if (h.last && w.distanceTo(h.last) < 0.05) {
+        h.sv.lerp(w.clone().sub(h.last).divideScalar(dt), 1 - Math.exp(-dt / 0.06));
+        const acc = h.sv.clone().sub(h.lsv).divideScalar(dt).clampLength(0, 8);
+        const j = clamp(-acc.dot(ax.n) * 0.02, -0.25, 0.25);
+        FINGERS.forEach((f, i) => { const k = 90 + 25 * i, c = 2 * 0.3 * Math.sqrt(k); for (let s = 0; s < 4; s++) h.lag[i].step(j, k, c, dt / 4); });
+      }
+      h.last = w; h.lsv.copy(h.sv);
+    }
+    const q = new THREE.Quaternion();
+    FINGERS.forEach((f, i) => {
+      const fid = 0.035 * Math.sin(t * (0.5 + 0.13 * i) + i * 1.7 + (side === 'L' ? 2 : 0));
+      const gi = clamp(h.grip.x * FCURL.cascade[i] + h.lag[i].x + fid, -0.15, 1.15);
+      for (let j = 1; j <= 4; j++) {
+        const b = bn(`${f}${j}.${side}`), a = ax[`${f}${j}.${side}`];
+        const ang = j === 1 ? FCURL.palm[i] * gi : FCURL.joints[j - 2] * gi * (j === 4 ? 0.85 : 1);
+        b.quaternion.multiply(q.setFromAxisAngle(a.curl, ang));
+        if (j === 2) b.quaternion.multiply(q.setFromAxisAngle(a.spread, FCURL.spread[i] * h.spread.x * (side === 'R' ? 1 : -1)));
+      }
+    });
+    const tg = clamp(h.grip.x, 0, 1);
+    [0.35, 0.45, 0.6].forEach((m, j) => bn(`Thumb${j + 1}.${side}`).quaternion.multiply(q.setFromAxisAngle(ax[`Thumb${j + 1}.${side}`].curl, m * tg)));
+  }
 }
 
 // ---------- flowing hair and cloak: verlet cloth ----------
