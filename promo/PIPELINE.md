@@ -69,4 +69,4 @@ The compose page caches clip data: reload it after re-recording a clip. The prom
 The exhibit itself is served by the `site` preview (`python3 -m http.server 8780 --directory public`).
 
 The cloak's "before" clips (`03-cloak-old` group) must be recorded in the build before the boot and friction fixes. To get it:
-`git show e17f029:public/games/thedilligentshadow/exhibit.js > public/games/thedilligentshadow/exhibit-e17f029.js` and a copy of `index.html` pointing at it (`old-e17f029.html`). Delete both afterwards.
+`git show a7734ee:public/games/thedilligentshadow/exhibit.js > public/games/thedilligentshadow/exhibit-old.js` (the "Rig her fingers" commit, the last build before the boot and friction fixes) and a copy of `index.html` pointing at it (`old.html`). Delete both afterwards.
