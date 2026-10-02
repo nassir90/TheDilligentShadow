@@ -446,6 +446,47 @@ function placeTurnLegs() {
   }
 }
 const UPPER = ['lean', 'nod', 'uA', 'fA', 'uB', 'fB'];
+// Secondary motion, after the visitor's hand: the hips' smoothed velocity and clamped acceleration (and how fast
+// her lean and kicking thigh swing) drive a spring per spine segment, looser toward the head, a little underdamped
+// so the back gives and settles instead of moving as one plank. Zero at rest, so held poses are left exactly as set.
+const WOB = {
+  k: [190, 150, 115, 90, 70], zeta: 0.34,          // stiffness per segment, hips → head
+  fwd: [-0.01, -0.02, -0.03, -0.04, -0.05],    // hips speeding up forward: the upper body lags back
+  vert: [0.005, 0.01, 0.015, 0.02, 0.026],       // landing on a step (upward acceleration): it settles forward
+  lean: [-0.001, -0.0025, -0.004, -0.0055, -0.0075], // quick changes of lean: the top of the spine trails and overshoots
+  kick: [0.003, 0.004, 0.0045, 0.005, 0.005],    // a thigh swinging forward pulls the torso back over the hips
+  side: [0.0, 0.25, 0.5, 0.75, 1],                 // a slow, tiny side-to-side sway (breathing, balance)
+  arm: { k: 80, zeta: 0.3, fwd: -0.05 },
+};
+function wobble(dt, p) {
+  const w = rig.wob || (rig.wob = { last: null, sv: [0, 0], lsv: [0, 0], lv: 0, tv: 0, f: WOB.k.map(() => new Spring()),
+    arm: [new Spring(), new Spring()], t: 0, out: { f: [0, 0, 0, 0, 0], s: [0, 0, 0, 0, 0], arm: [0, 0] } });
+  if (!(dt > 0)) return w.out;
+  w.t += dt;
+  const pos = [fig.x, p.hipY], lean = rig.upper.lean, thigh = p.thighA;
+  // a teleport (reset, cut) restarts the filters instead of kicking the springs
+  if (!w.last || Math.abs(pos[0] - w.last[0]) > 0.05 || Math.abs(pos[1] - w.last[1]) > 0.05) {
+    w.last = pos; w.sv = [0, 0]; w.lsv = [0, 0]; w.lv = lean.v; w.lastThigh = thigh; w.tv = 0; return w.out;
+  }
+  const k = 1 - Math.exp(-dt / 0.05);
+  for (let i = 0; i < 2; i++) w.sv[i] += ((pos[i] - w.last[i]) / dt - w.sv[i]) * k;
+  const cl = v => clamp(v, -6, 6);
+  const af = cl((w.sv[0] - w.lsv[0]) / dt * Math.sin(rig.yaw)), av = cl((w.sv[1] - w.lsv[1]) / dt);
+  const la = clamp((lean.v - w.lv) / dt, -60, 60);
+  const tv = (thigh - w.lastThigh) / dt; w.tv += (tv - w.tv) * k; const ta = clamp(w.tv, -12, 12);
+  w.last = pos; w.lsv = [...w.sv]; w.lv = lean.v; w.lastThigh = thigh;
+  const n = 4, h = dt / n;
+  for (let i = 0; i < WOB.k.length; i++) {
+    const target = WOB.fwd[i] * af + WOB.vert[i] * av + WOB.lean[i] * la - WOB.kick[i] * ta, c = 2 * WOB.zeta * Math.sqrt(WOB.k[i]);
+    for (let j = 0; j < n; j++) w.f[i].step(target, WOB.k[i], c, h);
+    w.out.f[i] = w.f[i].x;
+    w.out.s[i] = 0.006 * WOB.side[i] * (Math.sin(w.t * 0.9 + i * 0.4) + 0.5 * Math.sin(w.t * 1.7 + 1.3));
+  }
+  const ca = 2 * WOB.arm.zeta * Math.sqrt(WOB.arm.k);
+  for (let s = 0; s < 2; s++) for (let j = 0; j < n; j++) w.arm[s].step(WOB.arm.fwd * af, WOB.arm.k, ca, h);
+  w.out.arm[0] = w.arm[0].x; w.out.arm[1] = w.arm[1].x;
+  return w.out;
+}
 function applyFigure(dt) {
   if (!rig.ready) return;
   // the upper body follows the pose through a short critically damped filter (~80 ms): the legs stay exact for
@@ -470,15 +511,17 @@ function applyFigure(dt) {
   const hipWant = L(0, p.hipY, 0);
   body.position.add(body.parent.worldToLocal(hipWant.clone()).sub(body.parent.worldToLocal(hipNow.clone())));
   body.updateMatrixWorld(true);
-  // spine and head lean forward about the hips
-  const up = (ang) => L(0, Math.cos(ang), Math.sin(ang)).sub(L(0, 0, 0));
+  // spine and head lean forward about the hips, each segment wobbling a little on its own spring (see wobble())
+  const wb = wobble(dt, p);
+  const up = (ang, side = 0) => L(Math.sin(side), Math.cos(ang), Math.sin(ang)).sub(L(0, 0, 0));
   const aimDir = (b, c, dir) => aimBone(bn(b), bn(c), bn(b).getWorldPosition(new THREE.Vector3()).add(dir));
-  aimDir('Hips', 'Abdomen', up(p.lean * 0.6));
-  aimDir('Abdomen', 'Torso', up(p.lean));
-  if (bn('Chest')) { aimDir('Torso', 'Chest', up(p.lean)); aimDir('Chest', 'Neck', up(p.lean)); }
-  else aimDir('Torso', 'Neck', up(p.lean));
-  aimDir('Neck', 'Head', up(p.lean + p.nod * 0.5));
-  aimDir('Head', 'Head_end', up(p.lean + p.nod));
+  aimDir('Hips', 'Abdomen', up(p.lean * 0.6 + wb.f[0], wb.s[0]));
+  aimDir('Abdomen', 'Torso', up(p.lean + wb.f[1], wb.s[1]));
+  if (bn('Chest')) { aimDir('Torso', 'Chest', up(p.lean + wb.f[2], wb.s[2])); aimDir('Chest', 'Neck', up(p.lean + wb.f[3], wb.s[3])); }
+  else aimDir('Torso', 'Neck', up(p.lean + wb.f[3], wb.s[3]));
+  aimDir('Neck', 'Head', up(p.lean + p.nod * 0.5 + wb.f[4], wb.s[4]));
+  aimDir('Head', 'Head_end', up(p.lean + p.nod + wb.f[4] * 1.15, wb.s[4]));
+  p.uA += wb.arm[0]; p.uB += wb.arm[1];
   // how far her hips are bent (0 standing, 1 seated): the cloak lets go of her lower back as she sits
   rig.hipFlex = ss(((p.thighA + p.thighB) / 2 - 0.45) / 0.8);
   // legs: thigh toward the knee, shin toward the ankle, then the foot bone placed on the ankle with its pitch
