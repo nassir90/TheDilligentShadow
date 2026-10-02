@@ -237,6 +237,7 @@ const caster = (extra = {}) => new THREE.MeshBasicMaterial({ colorWrite: false, 
 let L1 = 0.13, L2 = 0.13, UA = 0.09, FA = 0.1, ANKLE_H = 0.007;
 const FIG_H = 0.56, PERSON_H = 1.6;    // a 1.6 m woman cast as a 56 cm shadow
 let FOOT = { heel: [-0.012, -0.007], toe: [0.034, -0.007], tip: [0.041, -0.003] };
+const FOOTS = { L: FOOT, R: FOOT };   // per foot (leg A is the right, B the left), measured in setupFigure
 const rotF = ([x, y], p) => [x * Math.cos(p) + y * Math.sin(p), -x * Math.sin(p) + y * Math.cos(p)];   // foot pitch: + = toes down
 const reach = (a, b) => Math.cos(a) * L1 + Math.cos(a - b) * L2;
 function withHip(p) { return { pitchA: 0, pitchB: 0, ...p, hipY: Math.max(reach(p.thighA, p.kneeA), reach(p.thighB, p.kneeB)) + ANKLE_H }; }
@@ -319,22 +320,27 @@ function setupFigure(gltf) {
   // foot rest orientation relative to the figure root, so pitch can be applied on top
   const rootQ = rig.root.getWorldQuaternion(new THREE.Quaternion()).invert();
   for (const side of ['L', 'R']) rig.footRest[side] = rootQ.clone().multiply(bn('Foot.' + side).getWorldQuaternion(new THREE.Quaternion()));
-  // measure the shoe from the skinned meshes themselves: heel, toe and sole relative to the ankle
-  const ankle = P('Foot.L'), v = new THREE.Vector3();
-  let heel = 0, toe = 0, sole = 0, tipY = 0;
-  for (const mesh of meshes) {
-    const sk = mesh.skeleton, joints = mesh.geometry.attributes.skinIndex, weights = mesh.geometry.attributes.skinWeight;
-    const footIdx = sk.bones.indexOf(bn('Foot.L'));
-    mesh.updateMatrixWorld(true);
-    for (let i = 0; i < joints.count; i++) {
-      let best = 0, bw = -1;
-      const W = [weights.getX(i), weights.getY(i), weights.getZ(i), weights.getW(i)], J = [joints.getX(i), joints.getY(i), joints.getZ(i), joints.getW(i)];
-      for (let k = 0; k < 4; k++) if (W[k] > bw) { bw = W[k]; best = J[k]; }
-      if (best !== footIdx) continue;
-      mesh.boneTransform(i, v); mesh.localToWorld(v); const r = toRoot(v).sub(ankle);
-      heel = Math.min(heel, r.z); sole = Math.min(sole, r.y);
-      if (r.z > toe) { toe = r.z; tipY = r.y; }
+  // measure each shoe from the skinned meshes themselves (foot and toe bones): heel, toe and sole relative to the
+  // ankle. The two feet differ (the right reaches ~17 mm further forward), so each leg pivots on its own heel and toe.
+  const v = new THREE.Vector3(), shoe = {};
+  for (const side of ['L', 'R']) {
+    const ankle = P('Foot.' + side);
+    let heel = 0, toe = 0, sole = 0, tipY = 0;
+    for (const mesh of meshes) {
+      const sk = mesh.skeleton, joints = mesh.geometry.attributes.skinIndex, weights = mesh.geometry.attributes.skinWeight;
+      const ids = [sk.bones.indexOf(bn('Foot.' + side)), sk.bones.indexOf(bn('PT.' + side))].filter(k => k >= 0);
+      mesh.updateMatrixWorld(true);
+      for (let i = 0; i < joints.count; i++) {
+        let best = 0, bw = -1;
+        const W = [weights.getX(i), weights.getY(i), weights.getZ(i), weights.getW(i)], J = [joints.getX(i), joints.getY(i), joints.getZ(i), joints.getW(i)];
+        for (let k = 0; k < 4; k++) if (W[k] > bw) { bw = W[k]; best = J[k]; }
+        if (!ids.includes(best)) continue;
+        mesh.boneTransform(i, v); mesh.localToWorld(v); const r = toRoot(v).sub(ankle);
+        heel = Math.min(heel, r.z); sole = Math.min(sole, r.y);
+        if (r.z > toe) { toe = r.z; tipY = r.y; }
+      }
     }
+    shoe[side] = { heel, toe, sole, tipY };
   }
   // the body surface around the spine, for fitting the cloak: rest-pose vertices skinned to the torso bones
   const TORSO = ['Body', 'Hips', 'Abdomen', 'Torso', 'Chest', 'Neck', 'Shoulder.L', 'Shoulder.R', 'UpperLeg.L', 'UpperLeg.R'].map(n => bn(n)).filter(Boolean);
@@ -362,8 +368,9 @@ function setupFigure(gltf) {
     rig.thighBack = back;
   }
   rig.waistY = rig.hipRestY + 0.045;
-  ANKLE_H = -sole;
-  FOOT = { heel: [heel + 0.002, -ANKLE_H], toe: [toe - 0.006, -ANKLE_H], tip: [toe, Math.max(tipY, -ANKLE_H + 0.002)] };
+  ANKLE_H = -Math.min(shoe.L.sole, shoe.R.sole);
+  for (const side of ['L', 'R']) { const f = shoe[side]; FOOTS[side] = { heel: [f.heel + 0.002, -ANKLE_H], toe: [f.toe - 0.006, -ANKLE_H], tip: [f.toe, Math.max(f.tipY, -ANKLE_H + 0.002)] }; }
+  FOOT = FOOTS.L;
   rig.ready = true;
   initFigureConstants();
   rig.yaw = Math.PI / 2; S.mode = 'rest'; S.t = 0; S.minSit = 1.5;   // she starts seated on her chair
@@ -438,7 +445,15 @@ function turnInPlace(face, dt) {
   return false;
 }
 // 3D two-bone IK from the real hip joint to an ankle target (stage coords); the knee bends toward `fwd`
+// The shadow floor. The stage is exact only in its own plane (z = 0): a foot a few centimetres nearer the lamp casts
+// lower on the wall, one further away casts higher, so with both on a level floor one shadow sinks into the ledge
+// and the other floats above it. The points whose shadows land exactly on the ledge's edge make a plane through the
+// lamp, tilting down toward it; feet are planted on that plane (ankles shifted by their depth, soles tilted to match).
+const SHADOW_FLOOR = (LEDGE_Y - LAMP.y) / (LAMP.z - WALL_Z);   // the drop per unit of depth toward the lamp (~0.09)
+const FLOOR_TILT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.atan(SHADOW_FLOOR));
+const SOLE_SINK = 0.0012;   // a hair into the ledge, so the soft shadow edge meets it with no light showing (as the chair's legs do)
 function solveLeg(side, A, fwd = new THREE.Vector3(Math.sin(rig.yaw), 0, Math.cos(rig.yaw))) {
+  A = A.clone(); A.y -= SHADOW_FLOOR * A.z + SOLE_SINK;
   const H = stageG.worldToLocal(bn('UpperLeg.' + side).getWorldPosition(new THREE.Vector3()));
   const v = A.clone().sub(H), d = clamp(v.length(), Math.abs(L1 - L2) + 1e-4, L1 + L2 - 1e-4), dir = v.normalize();
   const a = (L1 * L1 - L2 * L2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
@@ -455,7 +470,7 @@ function placeTurnLegs() {
     solveLeg(side, g.pos, fwd);
     const foot = bn('Foot.' + side), at = bn('LowerLeg.' + side + '_end').getWorldPosition(new THREE.Vector3());
     foot.position.copy(foot.parent.worldToLocal(at));
-    const want = stageG.getWorldQuaternion(_q2).multiply(_q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), g.yaw)).multiply(rig.footRest[side]);
+    const want = FLOOR_TILT.clone().multiply(stageG.getWorldQuaternion(_q2)).multiply(_q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), g.yaw)).multiply(rig.footRest[side]);
     foot.quaternion.copy(foot.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(want));
     foot.updateMatrixWorld(true);
   }
@@ -549,7 +564,7 @@ function applyFigure(dt) {
     solveLeg(side, stageG.worldToLocal(ank.clone()));
     const foot = bn('Foot.' + side), at = bn('LowerLeg.' + side + '_end').getWorldPosition(new THREE.Vector3());
     foot.position.copy(foot.parent.worldToLocal(at));
-    const want = rig.root.getWorldQuaternion(_q2).multiply(_q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), pi)).multiply(rig.footRest[side]);
+    const want = FLOOR_TILT.clone().multiply(rig.root.getWorldQuaternion(_q2)).multiply(_q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), pi)).multiply(rig.footRest[side]);
     foot.quaternion.copy(foot.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(want));
     foot.updateMatrixWorld(true);
   }
@@ -907,7 +922,8 @@ const GAITS = {
   run:    { S: 0.40, v: 0.62, clear: 0.022, Hc: 0.25, bob: 0.009, lean: 0.2, nod: -0.05, arm: 1.2, elbow: 1.1 },
 };
 // foot for one leg at gait phase phi; Af = where the ankle sits during foot-flat (distance along the walk)
-function footAt(phi, Af, G) {
+function footAt(phi, Af, G) {   // G.F: which foot's heel and toe to pivot on
+  const FOOT = G.F || FOOTS.L;
   if (phi < GAIT.heelEnd) {                       // heel strike → foot flat, pivoting on the heel
     const p = lerp(GAIT.strike, 0, ss(phi / GAIT.heelEnd));
     const hx = Af + FOOT.heel[0], [rx, ry] = rotF(FOOT.heel, p);
@@ -943,13 +959,14 @@ function gaitPose(d, w) {
   for (const L of ['A', 'B']) {
     const s = d / S + OFFSETS[L], phi = s - Math.floor(s);
     const Af = (Math.floor(s) - OFFSETS[L]) * S + GAIT.c * S;
-    let ft = footAt(phi, Af, { ...G, S });
+    const GF = { ...G, S, F: L === 'A' ? FOOTS.R : FOOTS.L };
+    let ft = footAt(phi, Af, GF);
     if (L === 'B' && d < win) {                     // first step: B swings out from where it stood
-      const uu = clamp((phi - 0.75) / 0.25, 0, 1), b = footAt(0, Af + S, { ...G, S });
+      const uu = clamp((phi - 0.75) / 0.25, 0, 1), b = footAt(0, Af + S, GF);
       ft = { x: lerp(0, b.x, ss(uu)), y: lerp(ANKLE_H, b.y, uu) + G.clear * Math.sin(Math.PI * uu), p: lerp(0, GAIT.strike, ss(uu)) };
     }
     if (L === w.lastSwing && d > w.D - win && phi >= GAIT.toeOff - 1e-9) {   // last step: swing in beside the planted foot
-      const uu = clamp((phi - GAIT.toeOff) / (0.75 - GAIT.toeOff), 0, 1), a = footAt(GAIT.toeOff - 1e-9, Af, { ...G, S });
+      const uu = clamp((phi - GAIT.toeOff) / (0.75 - GAIT.toeOff), 0, 1), a = footAt(GAIT.toeOff - 1e-9, Af, GF);
       ft = { x: lerp(a.x, w.D, ss(uu)), y: lerp(a.y, ANKLE_H, uu) + G.clear * Math.sin(Math.PI * uu), p: lerp(GAIT.push, 0, ss(uu)) };
     }
     feet[L] = { ...ft, phi };
@@ -1035,7 +1052,7 @@ const LEVER_HALF_W = 0.0019 * ratio(SW.z);
 let KICK_HIP = 0.26, STRIKE = { a: 0.9, x: -0.2 }, SIT_X = CHAIR_X, FRONT_X = CHAIR_X + 0.15, SIT_HIP = 0.18;
 function toeAt(a) {
   const [, [ax, ay]] = legPts(0, KICK_HIP, a, STRIKE_B, 1);
-  const [tx, ty] = rotF(FOOT.tip, KICK_PITCH);
+  const [tx, ty] = rotF(FOOTS.R.tip, KICK_PITCH);   // she kicks with her right (leg A)
   return [ax + tx, ay + ty];
 }
 // angles: radians from straight down, positive = forward; shins and forearms bend relative to the segment above
