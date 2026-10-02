@@ -601,7 +601,7 @@ function fingerAxes(side) {
 function gripFor() {   // [grip, spread] for what she is doing
   const m = S.mode;
   if (m === 'stomp') return [1.0, -0.2];
-  if (m === 'kick') return S.t / KICK.dur > 0.35 && S.t / KICK.dur < KICK.release ? [0.12, 0.9] : [0.3, 0.3];
+  if (m === 'kick') return [0.95, -0.15];
   if (m === 'push') return [0.22, 0.6];
   if (m === 'fakeRun') return [0.62, 0];
   if (m === 'home' || m === 'giveupWalk') return [0.5, 0];
@@ -1027,8 +1027,7 @@ function walkTo(tx, dt, gaitName = 'walk') {
 // ---------- the kick ----------
 const STRIKE_B = 0.06, KICK_PITCH = 0.1;
 const SUPPORT = { thighB: 0, kneeB: 0.08, pitchB: 0 };   // standing knee a little soft; thigh set in init so the ankle stays under the hip
-function leverShadowPoint(frac) {
-  const a = SW.maxTilt;
+function leverShadowPoint(frac, a = SW.maxTilt) {   // a: the lever's angle (leverPivot.rotation.z), fully on by default
   return shadowOf(new THREE.Vector3(SW.x - Math.sin(a) * SW.lever * frac, PLINTH.h + SW.pivot + Math.cos(a) * SW.lever * frac, SW.z));
 }
 const CONTACT = leverShadowPoint(0.5);
@@ -1156,9 +1155,18 @@ function kickPose(u, held) {
     p.uA = lerp(-0.4, 0.06, ss(k)); p.fA = lerp(0.3, 0.14, ss(k)) + 0.55 * Math.sin(k * Math.PI);
     p.uB = lerp(0.7, -0.04, ss(k)); p.fB = lerp(0.35, 0.12, ss(k)) + 0.45 * Math.sin(k * Math.PI);
   }
+  // elbows drawn back and bent, fists tucked in, for the whole kick (eased in and out so it meets the standing pose)
+  const e = ss(u / 0.22) * (1 - ss((u - 0.8) / 0.2));
+  p.uA -= 0.55 * e; p.uB -= 0.55 * e; p.fA += 0.75 * e; p.fB += 0.75 * e;
   return p;
 }
-const PUSH = { dx: 0.03, kickAnkle: [0, 0], supAnkle: [0, 0] };
+const PUSH = { dx: 0.03, kickAnkle: [0, 0], supAnkle: [0, 0], follow: [0, 0] };
+// while she leans on it, her toe rides the lever wherever the visitor moves it (follow: how far its contact point has
+// moved from where it sits fully on)
+function followLever() {
+  const c = leverShadowPoint(0.5, leverPivot.rotation.z);
+  PUSH.follow = [c.x - CONTACT.x, c.y - CONTACT.y];
+}
 // the lingering push: the foot stays on the lever and leans into it in slow pulses, toes curling, arms bracing
 let pushForce = 0;      // 0..1, read by the lever (strain) and the visitor's hand (finger flex)
 let kickAge = 9;        // seconds since a kick landed on the held lever; a brief jolt the visitor's finger feels
@@ -1168,7 +1176,7 @@ const strain = () => Math.max(pushForce, 0.8 * kickJolt());
 // switch so the kicking knee bends, and each pulse leans a little further in.
 function pushLegs(dx) {
   const hx = STRIKE.x + dx, hy = KICK_HIP - Math.abs(dx) * 0.2;   // sinks a little as she leans in
-  const k = ik(hx, hy, PUSH.kickAnkle[0], PUSH.kickAnkle[1]), sp = ik(hx, hy, PUSH.supAnkle[0], ANKLE_H);
+  const k = ik(hx, hy, PUSH.kickAnkle[0] + PUSH.follow[0], PUSH.kickAnkle[1] + PUSH.follow[1]), sp = ik(hx, hy, PUSH.supAnkle[0], ANKLE_H);
   return { x: hx, hipY: hy, thighA: k.a, kneeA: k.b, thighB: sp.a, kneeB: sp.b };
 }
 function pushPose(t) {
@@ -1276,7 +1284,7 @@ function afterKick() {   // decide what the next attempt is, or give up
 function stepFigure(dt, t) {
   if (!rig.ready) return;
   S.t += dt; S.clock += dt; turnDt = dt;
-  pushForce = 0;
+  pushForce = 0; PUSH.follow[0] = PUSH.follow[1] = 0;
   switch (S.mode) {
     case 'rest':                   // sitting quietly; when the lamp comes on she takes a moment before getting up
       if (on) {
@@ -1310,6 +1318,7 @@ function stepFigure(dt, t) {
       break;
     }
     case 'push': {                 // kick in, then linger and lean on the lever
+      followLever();
       if (S.t < 0) { blend(POSES.stand, 1 - Math.pow(1e-4, dt)); break; }
       const inT = KICK.contact * KICK.dur;
       if (S.t < inT) { fig.pose = kickPose(S.t / KICK.dur, true); break; }
@@ -1330,6 +1339,13 @@ function stepFigure(dt, t) {
         fig.x = STRIKE.x + PUSH.dx * back;
         fig.pose.hipY = KICK_HIP - PUSH.dx * 0.2 * back;
         const sp = ik(fig.x, fig.pose.hipY, PUSH.supAnkle[0], ANKLE_H); fig.pose.thighB = sp.a; fig.pose.kneeB = sp.b;
+        // the foot leaves the lever from wherever the visitor has it, easing back to its own path
+        const fade = 1 - ss(Math.min(1, (ru - KICK.release) / 0.2));
+        if (fade > 0 && (PUSH.follow[0] || PUSH.follow[1])) {
+          const [, an] = legPts(fig.x, fig.pose.hipY, fig.pose.thighA, fig.pose.kneeA, 1);
+          const k = ik(fig.x, fig.pose.hipY, an[0] + PUSH.follow[0] * fade, an[1] + PUSH.follow[1] * fade);
+          fig.pose.thighA = k.a; fig.pose.kneeA = k.b;
+        }
       }
       if (ru >= 1) { S.fails++; afterKick(); }
       break;
