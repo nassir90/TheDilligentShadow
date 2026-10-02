@@ -145,30 +145,61 @@ function drawCalls(calls, map, key, t) {
     tbox('call#' + id, ig, text, tx, ay, size); ig.restore();
   }
 }
-const SUB = { size: 50, lh: 60, y: 1730, maxW: 940 };
+const SUB = { size: 50, lh: 60, y: 1730, maxW: 940, maxLines: 2 };
 function subLines(text) { ig.save(); ig.font = `400 ${SUB.size}px ${SERIF}`; const l = wrap(ig, text, SUB.maxW); ig.restore(); return l; }
-function subTop(text) { return SUB.y - (subLines(text).length - 1) * SUB.lh - SUB.size * 0.72; }   // top of the subtitle's first line
-function inkSubtitle(text, alpha, words, t) {
-  ig.save(); ig.globalAlpha = alpha; ig.font = `400 ${SUB.size}px ${SERIF}`; ig.textAlign = 'left'; ig.fillStyle = '#fff'; ig.textBaseline = 'alphabetic';
-  const lines = subLines(text), y0 = SUB.y - (lines.length - 1) * SUB.lh;
-  // the word being spoken: the last one to have started (it stays lit through a pause until the next begins)
+function subTop(text) { return SUB.y - (Math.min(SUB.maxLines, subLines(text).length) - 1) * SUB.lh - SUB.size * 0.72; }   // top of the subtitle's first line
+// A long line is shown as pages of at most two lines, each page while its own words are spoken. Pages break at
+// sentence ends; a sentence too long for one page breaks at its commas; a clause still too long splits evenly by
+// words. Whole pieces are then packed into pages, so nothing breaks mid-phrase or strands a word.
+function subPages(text, words) {
+  ig.save(); ig.font = `400 ${SUB.size}px ${SERIF}`;
+  const toks = text.split(' ');
+  const fits = idx => wrap(ig, idx.map(i => toks[i]).join(' '), SUB.maxW).length <= SUB.maxLines;
+  const splitAt = (idx, re) => { const out = []; let cur = []; idx.forEach(i => { cur.push(i); if (re.test(toks[i])) { out.push(cur); cur = []; } }); if (cur.length) out.push(cur); return out; };
+  const even = idx => { for (let k = 2; ; k++) { const n = Math.ceil(idx.length / k), parts = []; for (let a = 0; a < idx.length; a += n) parts.push(idx.slice(a, a + n)); if (parts.every(fits)) return parts; } };
+  const all = toks.map((_, i) => i), pieces = [];
+  for (const sent of splitAt(all, /[.!?]$/)) {
+    if (fits(sent)) { pieces.push(sent); continue; }
+    for (const cl of splitAt(sent, /[,;:]$/)) fits(cl) ? pieces.push(cl) : pieces.push(...even(cl));
+  }
+  // pack whole pieces into pages, but join clause pieces back together only while they still fit
+  const pages = []; let cur = [];
+  for (const pc of pieces) { if (cur.length && !fits([...cur, ...pc])) { pages.push(cur); cur = []; } cur = [...cur, ...pc]; }
+  if (cur.length) pages.push(cur);
+  // two lines on a page are balanced (the break that makes them most even), so no word is left on its own
+  const balance = idx => {
+    const ws = idx.map(i => toks[i]), full = ws.join(' ');
+    if (ig.measureText(full).width <= SUB.maxW) return [ws];
+    let best = null;
+    for (let k = 1; k < ws.length; k++) { const a = ig.measureText(ws.slice(0, k).join(' ')).width, b = ig.measureText(ws.slice(k).join(' ')).width; if (a > SUB.maxW || b > SUB.maxW) continue; const m = Math.max(a, b); if (!best || m < best.m) best = { m, k }; }
+    return best ? [ws.slice(0, best.k), ws.slice(best.k)] : wrap(ig, full, SUB.maxW).map(l => l.split(' '));
+  };
+  const out = pages.map(idx => ({ idx, lines: balance(idx) }));
+  ig.restore();
+  out.forEach(p => { const k = p.idx[0]; p.start = words && words[k] ? words[k].t0 : null; p.frac = k / toks.length; });
+  return out;
+}
+function inkSubtitle(c, alpha, words, t) {   // t: time in the narration take
+  const pages = c._pages || (c._pages = subPages(c.text, words));
+  let pi = 0; for (let i = 0; i < pages.length; i++) { const st = pages[i].start ?? (c.a + pages[i].frac * (c.b - c.a)); if (t >= st - 0.05) pi = i; }
+  const pg = pages[pi], st = pg.start ?? (c.a + pg.frac * (c.b - c.a));
+  const a = alpha * (pi ? Math.min(1, (t - (st - 0.05)) / 0.12) : 1);   // a quick fade-in for each new page
+  ig.save(); ig.globalAlpha = a; ig.font = `400 ${SUB.size}px ${SERIF}`; ig.textAlign = 'left'; ig.fillStyle = '#fff'; ig.textBaseline = 'alphabetic';
   let cur = -1; if (words) for (let i = 0; i < words.length; i++) if (t >= words[i].t0) cur = i;
-  let wi = 0;
-  lines.forEach((l, li) => {
-    const yy = y0 + li * SUB.lh, lw = ig.measureText(l).width, x0 = (W - lw) / 2, parts = l.split(' ');
+  const y0 = SUB.y - (pg.lines.length - 1) * SUB.lh; let wi = pg.idx[0];
+  pg.lines.forEach((ln, li) => {
+    const l = ln.join(' '), yy = y0 + li * SUB.lh, lw = ig.measureText(l).width, x0 = (W - lw) / 2;
     let x = x0;
-    for (const p of parts) {
+    for (const p of ln) {
       const pw = ig.measureText(p).width;
-      if (wi === cur) {
-        const pad = 8, top = yy - SUB.size * 0.78, h = SUB.size * 1.02;
-        ig.fillRect(x - pad, top, pw + pad * 2, h);
-        ig.globalCompositeOperation = 'destination-out'; ig.fillText(p, x, yy); ig.globalCompositeOperation = 'source-over';
-      } else ig.fillText(p, x, yy);
+      if (wi === cur) { const pad = 8; ig.fillRect(x - pad, yy - SUB.size * 0.78, pw + pad * 2, SUB.size * 1.02); ig.globalCompositeOperation = 'destination-out'; ig.fillText(p, x, yy); ig.globalCompositeOperation = 'source-over'; }
+      else ig.fillText(p, x, yy);
       x += pw + ig.measureText(' ').width; wi++;
     }
     tbox('subtitle', ig, l, x0, yy, SUB.size);
   });
   ig.restore();
+  (STATUS.subLines ||= { max: 0 }).max = Math.max(STATUS.subLines.max, pg.lines.length);
 }
 // a stack of centred lines laid out from their real glyph boxes: each line's top sits `gap` × its font size below
 // the line above
@@ -484,7 +515,7 @@ async function run(id, opts = {}) {
     }
     if (STYLE === 'ink') {
       inkTitle(E, t);
-      for (const c of TL.cues) if (c.text) { const b = c.at + (c.b - c.a) + 0.3; if (t >= c.at - 0.1 && t <= b + 0.15) inkSubtitle(c.text, Math.min(1, (t - (c.at - 0.1)) / 0.15, (b + 0.15 - t) / 0.15), WORDS && WORDS[c.say], c.a + (t - c.at)); }
+      for (const c of TL.cues) if (c.text) { const b = c.at + (c.b - c.a) + 0.3; if (t >= c.at - 0.1 && t <= b + 0.15) inkSubtitle(c, Math.min(1, (t - (c.at - 0.1)) / 0.15, (b + 0.15 - t) / 0.15), WORDS && WORDS[c.say], c.a + (t - c.at)); }
       applyInk(g);
       const subs = TL.cues.filter(c => c.text && c.at < s.t0 + s.dur && c.at + (c.b - c.a) + 0.45 > s.t0);
       const bottom = (subs.length ? Math.min(...subs.map(c => subTop(c.text))) : H - 60) - 48;   // just clear of the subtitles
