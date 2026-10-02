@@ -94,34 +94,81 @@ function cutLabel(g, text, x, y, size = 34) {
   BOXES.push({ group: 'label:' + text, x0: x, x1: x + w, y0: y, y1: y + h, size, text });
 }
 // annotations recorded with a clip (in clip pixels), drawn into the ink mask at output scale
-function drawAnn(list, map) {
+function drawAnn(list, map, key = '', t = 0) {
+  const calls = [];
   ig.save(); ig.strokeStyle = '#fff'; ig.fillStyle = '#fff'; ig.lineWidth = 3; ig.lineCap = 'round'; ig.lineJoin = 'round';
   for (const a of list || []) {
     ig.globalAlpha = a.o ?? 1;
     if (a.k === 'dot') { const [x, y] = map(a.x, a.y); ig.beginPath(); ig.arc(x, y, (a.r || 7) * 0.8, 0, 7); a.fill === false ? ig.stroke() : ig.fill(); }
     else if (a.k === 'line') { ig.lineWidth = a.w || 3; ig.beginPath(); a.pts.forEach((p, i) => { const [x, y] = map(...p); i ? ig.lineTo(x, y) : ig.moveTo(x, y); }); ig.stroke(); ig.lineWidth = 3; }
-    else if (a.k === 'call') {
-      // a small circle on the feature, a leader to the label, and the leader runs on to underline it
-      const [cx, cy] = map(a.x, a.y), r = (a.r || 34) * 0.55, size = a.size || 36;
-      ig.font = `400 ${size}px ${SERIF}`; const tw = ig.measureText(a.text).width;
-      let dx = a.dx; if (cx + dx - tw < 24 && dx < 0) dx = -dx; else if (cx + dx + tw > W - 24 && dx > 0) dx = -dx;   // keep it on screen
-      const lx = cx + dx, ly = cy + a.dy, left = dx < 0, ux1 = left ? lx - tw - 14 : lx + tw + 14, uy = ly + Math.round(size * 0.3) + 7;   // below descenders (p, g, y)
-      const ang = Math.atan2(uy - cy, lx - cx), ex = cx + Math.cos(ang) * r, ey = cy + Math.sin(ang) * r;
-      ig.beginPath(); ig.arc(cx, cy, r, 0, 7); ig.stroke();
-      ig.beginPath(); ig.moveTo(ex, ey); ig.lineTo(lx, uy); ig.lineTo(ux1, uy); ig.stroke();
-      ig.textAlign = left ? 'right' : 'left'; const tx = lx + (left ? -9 : 9); ig.fillText(a.text, tx, ly);
-      tbox('call#' + (drawAnn.n = (drawAnn.n || 0) + 1), ig, a.text, tx, ly, size); ig.textAlign = 'left';   // each callout is its own element
-    }
+    else if (a.k === 'call') calls.push(a);
   }
   ig.restore();
+  drawCalls(calls, map, key, t);
+}
+// Callouts: the circle follows its feature every frame, but the label stays put until the feature has moved well
+// away from it, then glides to its new place; callouts fade in and out instead of popping. State is kept per
+// callout id (per clip), so a label keeps its place from frame to frame.
+const CALL = new Map();
+function drawCalls(calls, map, key, t) {
+  const live = new Set();
+  for (const a of calls) {
+    const id = key + ':' + (a.id ?? a.text), [cx, cy] = map(a.x, a.y), size = a.size || 36;
+    ig.save(); ig.font = `400 ${size}px ${SERIF}`; const tw = ig.measureText(a.text).width; ig.restore();
+    let dx = a.dx; if (cx + dx - tw < 24 && dx < 0) dx = -dx; else if (cx + dx + tw > W - 24 && dx > 0) dx = -dx;   // keep it on screen
+    const gx = cx + dx, gy = cy + a.dy;
+    let st = CALL.get(id);
+    if (!st || t - st.t > 0.5 || t < st.t) st = { ax: gx, ay: gy, gx, gy, alpha: 0, t };
+    if (Math.hypot(st.gx - gx, st.gy - gy) > 180 || st.gx - tw < 0 || st.gx + tw > W) { st.gx = gx; st.gy = gy; }   // drifted too far: move on
+    // glide toward the new place, gently, and never faster than 20 px a frame
+    const dt = Math.max(0, t - st.t), k = 1 - Math.exp(-dt / 0.45);
+    let mx = (st.gx - st.ax) * k, my = (st.gy - st.ay) * k; const ml = Math.hypot(mx, my), cap = 20 * dt * 30;
+    if (ml > cap) { mx *= cap / ml; my *= cap / ml; }
+    st.ax += mx; st.ay += my; st.alpha += (1 - st.alpha) * (1 - Math.exp(-dt / 0.12));
+    if (st.px != null) { const m = (STATUS.callMotion ||= { circle: 0, label: 0, frames: 0, maxLabelStep: 0 }); const ls = Math.hypot(st.ax - st.pax, st.ay - st.pay); m.circle += Math.hypot(cx - st.px, cy - st.py); m.label += ls; m.frames++; m.maxLabelStep = Math.max(m.maxLabelStep, +ls.toFixed(1)); }
+    st.px = cx; st.py = cy; st.pax = st.ax; st.pay = st.ay;
+    Object.assign(st, { t, cx, cy, text: a.text, size, r: (a.r || 34) * 0.55, seen: t });
+    CALL.set(id, st); live.add(id);
+  }
+  for (const [id, st] of CALL) {
+    if (!id.startsWith(key + ':')) continue;
+    if (!live.has(id)) { const dt = Math.max(0, t - st.t); st.t = t; st.alpha *= Math.exp(-dt / 0.15); if (st.alpha < 0.02 || t - st.seen > 1) { CALL.delete(id); continue; } }
+    // draw: circle, leader to the label, leader runs on as its underline
+    const { cx, cy, r, ax, ay, text, size } = st, left = ax < cx;
+    ig.save(); ig.globalAlpha = st.alpha; ig.strokeStyle = '#fff'; ig.fillStyle = '#fff'; ig.lineWidth = 3; ig.lineCap = 'round';
+    ig.font = `400 ${size}px ${SERIF}`; const tw = ig.measureText(text).width;
+    const uy = ay + Math.round(size * 0.3) + 7, ux1 = left ? ax - tw - 14 : ax + tw + 14;
+    const ang = Math.atan2(uy - cy, ax - cx), ex = cx + Math.cos(ang) * r, ey = cy + Math.sin(ang) * r;
+    ig.beginPath(); ig.arc(cx, cy, r, 0, 7); ig.stroke();
+    ig.beginPath(); ig.moveTo(ex, ey); ig.lineTo(ax, uy); ig.lineTo(ux1, uy); ig.stroke();
+    ig.textAlign = left ? 'right' : 'left'; const tx = ax + (left ? -9 : 9); ig.fillText(text, tx, ay);
+    tbox('call#' + id, ig, text, tx, ay, size); ig.restore();
+  }
 }
 const SUB = { size: 50, lh: 60, y: 1730, maxW: 940 };
 function subLines(text) { ig.save(); ig.font = `400 ${SUB.size}px ${SERIF}`; const l = wrap(ig, text, SUB.maxW); ig.restore(); return l; }
 function subTop(text) { return SUB.y - (subLines(text).length - 1) * SUB.lh - SUB.size * 0.72; }   // top of the subtitle's first line
-function inkSubtitle(text, alpha) {
-  ig.save(); ig.globalAlpha = alpha; ig.font = `400 ${SUB.size}px ${SERIF}`; ig.textAlign = 'center'; ig.fillStyle = '#fff';
+function inkSubtitle(text, alpha, words, t) {
+  ig.save(); ig.globalAlpha = alpha; ig.font = `400 ${SUB.size}px ${SERIF}`; ig.textAlign = 'left'; ig.fillStyle = '#fff'; ig.textBaseline = 'alphabetic';
   const lines = subLines(text), y0 = SUB.y - (lines.length - 1) * SUB.lh;
-  lines.forEach((l, i) => { ig.fillText(l, W / 2, y0 + i * SUB.lh); tbox('subtitle', ig, l, W / 2, y0 + i * SUB.lh, SUB.size); }); ig.restore();
+  // the word being spoken: the last one to have started (it stays lit through a pause until the next begins)
+  let cur = -1; if (words) for (let i = 0; i < words.length; i++) if (t >= words[i].t0) cur = i;
+  let wi = 0;
+  lines.forEach((l, li) => {
+    const yy = y0 + li * SUB.lh, lw = ig.measureText(l).width, x0 = (W - lw) / 2, parts = l.split(' ');
+    let x = x0;
+    for (const p of parts) {
+      const pw = ig.measureText(p).width;
+      if (wi === cur) {
+        const pad = 8, top = yy - SUB.size * 0.78, h = SUB.size * 1.02;
+        ig.fillRect(x - pad, top, pw + pad * 2, h);
+        ig.globalCompositeOperation = 'destination-out'; ig.fillText(p, x, yy); ig.globalCompositeOperation = 'source-over';
+      } else ig.fillText(p, x, yy);
+      x += pw + ig.measureText(' ').width; wi++;
+    }
+    tbox('subtitle', ig, l, x0, yy, SUB.size);
+  });
+  ig.restore();
 }
 // a stack of centred lines laid out from their real glyph boxes: each line's top sits `gap` × its font size below
 // the line above
@@ -342,7 +389,7 @@ function timeline(E, vo) {
     const line = s.say != null ? vo.lines[s.say] : null;
     const lead = s.lead ?? 0.35, len = line ? line.end - line.start : 0;
     const dur = Math.max(s.dur || 0, line ? lead + len + (s.tail ?? 0.5) : 0);
-    if (line) cues.push({ a: line.start, b: line.end, at: t + lead, text: E.lines[s.say].sub || E.lines[s.say].say });
+    if (line) cues.push({ a: line.start, b: line.end, at: t + lead, say: s.say, text: E.lines[s.say].sub || E.lines[s.say].say });
     for (const L of s.layers || []) for (const k of ['clip', 'a', 'b']) {
       const ref = k === 'clip' ? L : L[k]; if (!ref || !ref.clip) continue;
       if (ref.from === 'cont' || ref.from == null) ref._from = cursor[ref.clip] || 0; else ref._from = ref.from;
@@ -354,7 +401,7 @@ function timeline(E, vo) {
   return { segs, cues, total: t };
 }
 
-let STYLE = 'classic';
+let STYLE = 'classic', NOW = 0, WORDS = null;
 async function drawClipLayer(g, L, tl, rect) {
   const ct = L._from + tl * (L.speed || 1), len = clips[L.clip].meta.frames.length / clips[L.clip].meta.fps;
   if (ct > len + 1 / 30) { const o = (STATUS.overrun ||= {}); o[L.clip] = Math.max(o[L.clip] || 0, +(ct - len).toFixed(2)); }   // the clip has run out: it would freeze
@@ -363,7 +410,7 @@ async function drawClipLayer(g, L, tl, rect) {
   g.save(); if (L.alpha != null) g.globalAlpha = L.alpha;
   const map = cover(g, img, x, y, w, h, L.fx ?? 0.5, L.fy ?? 0.5); g.restore();
   if (STYLE === 'ink') {
-    if (meta.ann && L.ann !== false) { ig.save(); ig.beginPath(); ig.rect(x, y, w, h); ig.clip(); drawAnn(meta.ann, map); ig.restore(); }
+    if (meta.ann && L.ann !== false) { ig.save(); ig.beginPath(); ig.rect(x, y, w, h); ig.clip(); drawAnn(meta.ann, map, L.clip + '@' + y, NOW); ig.restore(); }
     if (L.label) inkCut(L.label, x + 36, y + (L.labelY ?? 36));
   } else if (L.label) pill(g, L.label, x + 30, y + 30, L.labelColor || (L.label.startsWith('BEFORE') ? C.red : C.green));
   return meta;
@@ -375,7 +422,8 @@ async function run(id, opts = {}) {
   const E = (0, eval)(await get(`/videos/${id}/edl.js`, 'text'));
   if (!E.lines) E.lines = await get(`/videos/${id}/script.json`);
   const vo = E.lines.length ? await get(`/videos/${id}/vo.json`) : { lines: [] };
-  const TL = timeline(E, vo); STYLE = E.style || 'classic';
+  const TL = timeline(E, vo); STYLE = E.style || 'classic'; CALL.clear();
+  WORDS = STYLE === 'ink' ? await get(`/videos/${id}/words.json`).catch(() => null) : null;
   for (const s of TL.segs) for (const L of s.layers || []) {
     for (const k of ['clip', 'a', 'b']) { const r = k === 'clip' ? L : L[k]; if (r && r.clip) await loadClip(r.clip); }
     if (L.series) for (const s2 of L.series) if (s2.clip) await loadClip(s2.clip);
@@ -386,7 +434,7 @@ async function run(id, opts = {}) {
   const only = opts.only;   // [from, to] seconds, for previews
   let batch = [], prevMode = null, lastMode = null;
   for (let f = 0; f < n; f++) {
-    const t = f / FPS;
+    const t = f / FPS; NOW = t;
     if (only && (t < only[0] || t >= only[1] || (f % (opts.every || 1)))) continue;
     const s = TL.segs.find(s => t >= s.t0 && t < s.t0 + s.dur) || TL.segs[TL.segs.length - 1], tl = t - s.t0;
     g.fillStyle = s.bg || C.bg; g.fillRect(0, 0, W, H); ig.clearRect(0, 0, W, H);
@@ -409,7 +457,7 @@ async function run(id, opts = {}) {
     }
     if (STYLE === 'ink') {
       inkTitle(E, t);
-      for (const c of TL.cues) if (c.text) { const b = c.at + (c.b - c.a) + 0.3; if (t >= c.at - 0.1 && t <= b + 0.15) inkSubtitle(c.text, Math.min(1, (t - (c.at - 0.1)) / 0.15, (b + 0.15 - t) / 0.15)); }
+      for (const c of TL.cues) if (c.text) { const b = c.at + (c.b - c.a) + 0.3; if (t >= c.at - 0.1 && t <= b + 0.15) inkSubtitle(c.text, Math.min(1, (t - (c.at - 0.1)) / 0.15, (b + 0.15 - t) / 0.15), WORDS && WORDS[c.say], c.a + (t - c.at)); }
       applyInk(g);
       const subs = TL.cues.filter(c => c.text && c.at < s.t0 + s.dur && c.at + (c.b - c.a) + 0.45 > s.t0);
       const bottom = (subs.length ? Math.min(...subs.map(c => subTop(c.text))) : H - 60) - 48;   // just clear of the subtitles

@@ -36,7 +36,7 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
     overlay(g, t, P, H, m) {
       const ft = f.step(t, H, P), ann = f.prints(t, P);
       for (const side of ['R', 'L']) { const s = ft[side]; if (!s.down) continue;
-        ann.push({ k: 'call', x: s.x, y: s.y, r: 30, dx: side === 'R' ? 150 : -150, dy: side === 'R' ? -170 : -260, text: s.state === 'sliding' ? `sliding ${mm(s.slip)} mm` : `planted ${mm(s.slip)} mm` }); }
+        ann.push({ k: 'call', id: side, x: s.x, y: s.y, r: 30, dx: side === 'R' ? 150 : -150, dy: side === 'R' ? -170 : -260, text: s.state === 'sliding' ? `sliding ${mm(s.slip)} mm` : `planted ${mm(s.slip)} mm` }); }
       m.ann = ann; m.slip = f.st.maxSlip;
     } }; };
   const turnClip = (name, h, mods) => { const f = feet(); return { name, w: 1080, h, dur: 6.5, mods,
@@ -45,8 +45,8 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
     cam: (() => { let cx = null; return (t, H) => { cx = cx == null ? STRIKE.x - 0.1 : cx + (clamp(fig.x, -0.62, STRIKE.x - 0.1) - cx) * 0.08; return h > 1000 ? lowCam(cx, 0.9)(t, H) : H.wallCam(cx, 0.12, 0.45, 36); }; })(),
     overlay(g, t, P, H, m) {
       const ft = f.step(t, H, P), ann = f.prints(t, P);
-      ann.push({ k: 'call', x: ft.R.x, y: ft.R.y, r: 30, dx: 160, dy: -200, text: ft.R.state });
-      ann.push({ k: 'call', x: ft.L.x, y: ft.L.y, r: 30, dx: -160, dy: -300, text: ft.L.state });
+      ann.push({ k: 'call', id: 'R', x: ft.R.x, y: ft.R.y, r: 30, dx: 160, dy: -200, text: ft.R.state });
+      ann.push({ k: 'call', id: 'L', x: ft.L.x, y: ft.L.y, r: 30, dx: -160, dy: -300, text: ft.L.state });
       m.ann = ann; m.slip = f.st.maxSlip;
     } }; };
 
@@ -62,7 +62,7 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
           if (walker) for (const [L, side] of [['A', 'R'], ['B', 'L']]) {
             const s = walker.d / walker.S + OFFSETS[L], phi = s - Math.floor(s);
             const name = phi < GAIT.heelEnd ? 'heel strike' : phi < GAIT.heelOff ? 'foot flat' : phi < GAIT.toeOff ? 'toe off' : 'swing';
-            ann.push({ k: 'call', x: ft[side].x, y: ft[side].y, r: 32, dx: side === 'R' ? 170 : -170, dy: side === 'R' ? -180 : -300, text: name });
+            ann.push({ k: 'call', id: side, x: ft[side].x, y: ft[side].y, r: 32, dx: side === 'R' ? 170 : -170, dy: side === 'R' ? -180 : -300, text: name });
           }
           m.ann = ann;
         } }; })(),
@@ -73,8 +73,8 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
           const ann = [], pt = n => P(H.bonePos(n)).slice(0, 2);
           for (const s of ['R', 'L']) ann.push({ k: 'line', w: 5, pts: [pt(`UpperLeg.${s}`), pt(`LowerLeg.${s}`), pt(`LowerLeg.${s}_end`)] });
           const [hx, hy] = pt('UpperLeg.R'), [ax, ay] = pt('LowerLeg.R_end');
-          ann.push({ k: 'call', x: hx, y: hy, r: 26, dx: -190, dy: -150, text: 'hip joint' });
-          ann.push({ k: 'call', x: ax, y: ay, r: 30, dx: 230, dy: 45, text: 'planted ankle' });   // out to the side: clear of the leg lines and the code box
+          ann.push({ k: 'call', id: 'hip', x: hx, y: hy, r: 26, dx: -190, dy: -150, text: 'hip joint' });
+          ann.push({ k: 'call', id: 'ankle', x: ax, y: ay, r: 30, dx: 230, dy: 45, text: 'planted ankle' });   // out to the side: clear of the leg lines and the code box
           m.ann = ann;
         } },
       (() => { const f = feet(); return { name: 'ik_montage', w: 1080, h: 1920, dur: 20,
@@ -82,9 +82,9 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
         cam: (() => { let cx = null; return (t, H) => { const want = clamp(fig.x, -0.6, -0.27); cx = cx == null ? want : cx + (want - cx) * 0.06; const at = H.wallPt(cx, 0.12), c = H.wallPt(cx, 0.2); return { pos: V(c.x, c.y + 0.03, c.z + 1.05), at, fov: 36 }; }; })(),
         overlay(g, t, P, H, m) {
           const ft = f.step(t, H, P), ann = f.prints(t, P), [hx, hy] = P(H.bonePos('Hips'));
-          ann.push({ k: 'call', x: hx, y: hy, r: 40, dx: 200, dy: -330, text: S.mode });
+          ann.push({ k: 'call', id: 'mode', x: hx, y: hy, r: 40, dx: 200, dy: -330, text: S.mode });
           const pl = ft.R.flat ? ft.R : ft.L.flat ? ft.L : null;
-          if (pl) ann.push({ k: 'call', x: pl.x, y: pl.y, r: 30, dx: -200, dy: 160, text: `max slip ${mm(f.st.maxSlip)} mm` });
+          if (pl) ann.push({ k: 'call', id: 'slip', x: pl.x, y: pl.y, r: 30, dx: -200, dy: 160, text: `max slip ${mm(f.st.maxSlip)} mm` });
           m.ann = ann; m.slip = f.st.maxSlip;
         } }; })(),
     ],
