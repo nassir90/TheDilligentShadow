@@ -370,6 +370,21 @@ function setupFigure(gltf) {
   // put the seat exactly under her: pose her seated, find where her hips and thighs actually bottom out
   hair.init(); cloak.init();       // cloth anchors are measured on the rest pose, so set up before posing her
   if (chair) { applyFigure(0); fitChairSeat(seatContact() - 0.0005); rig.upper = null; }
+  settleCloth();
+}
+// At boot the cloth would start as straight sheets hanging from her seated shoulders, through her lap and the chair,
+// and spend its first seconds fighting its way out into a drape she never makes. Instead, before the first frame,
+// she stands in front of the chair while the cloth hangs still, then sits down, with the cloth simulated all the way.
+function settleCloth() {
+  const end = POSES.sitRest, F = 1 / 60;
+  const pose = u => { const { x, pose } = sitPose(u, end); fig.x = x; fig.face = 1; fig.pose = pose; applyFigure(F); };
+  rig.upper = null; rig.wob = null; rig.fingers = null;
+  pose(0); hair.lastA = cloak.lastA = null;
+  const step = () => { hair.step(F); cloak.step(F); };
+  for (let i = 0; i < 30; i++) { pose(0); step(); }                 // standing: let it hang
+  for (let i = 0; i <= 60; i++) { pose(i / 60); step(); }           // sit down
+  for (let i = 0; i < 40; i++) { pose(1); step(); }                 // and settle
+  fig.x = SIT_X; fig.pose = { ...end };
 }
 
 // pose → bones. Leg A/arm A is the figure's right side: the side toward the lamp when it walks toward the switch.
@@ -741,7 +756,15 @@ class Cloth {
     const t = clamp(((P[k] - A.x) * abx + (P[k + 1] - A.y) * aby + (P[k + 2] - A.z) * abz) / (abx * abx + aby * aby + abz * abz || 1), 0, 1);
     const cx = A.x + abx * t, cy = A.y + aby * t, cz = A.z + abz * t;
     const dx = P[k] - cx, dy = P[k + 1] - cy, dz = P[k + 2] - cz, d = Math.hypot(dx, dy, dz);
-    if (d < r && d > 1e-6) { const s = (d + (r - d) * this.soft) / d; P[k] = cx + dx * s; P[k + 1] = cy + dy * s; P[k + 2] = cz + dz * s; }
+    if (d < r && d > 1e-6) this.pushTo(k, cx + dx * (d + (r - d) * this.soft) / d, cy + dy * (d + (r - d) * this.soft) / d, cz + dz * (d + (r - d) * this.soft) / d);
+  }
+  // Move a point out of a collider. Most of the push is also applied to its previous position, so a contact moves
+  // the cloth without flinging it: otherwise cloth pressed between a leg and its neighbours is pushed out, springs
+  // back in, and buzzes at the frame rate. (`absorb` 0 keeps the old, fully elastic push.)
+  pushTo(k, x, y, z) {
+    const P = this.pts, Q = this.prev, a = this.absorb || 0;
+    Q[k] += (x - P[k]) * a; Q[k + 1] += (y - P[k + 1]) * a; Q[k + 2] += (z - P[k + 2]) * a;
+    P[k] = x; P[k + 1] = y; P[k + 2] = z;
   }
   // the chair seat: cloth that comes down onto it stays on its top. The contact is dead (no bounce) and grippy
   // (it kills sliding), and only catches cloth arriving from above, so the hem hanging past the seat's edge is never
@@ -750,13 +773,18 @@ class Cloth {
     const P = this.pts, Q = this.prev, s = rig.seat, top = SEAT_Y + 0.003;
     const m = Math.abs(Q[q + 1] - top) < 0.001 ? 0.008 : 0;   // cloth already resting on the seat keeps hold of its edges
     if (!s || P[q] < s.back - m || P[q] > s.front + m || Math.abs(P[q + 2]) > s.half + m) return;
-    if (P[q + 1] >= top || Q[q + 1] < SEAT_Y - 0.01) return;
+    if (P[q + 1] >= top || Q[q + 1] < top - 0.002) return;   // (cloth swinging in under the edge is left alone, or it would pop up onto it)
     P[q + 1] = top; Q[q + 1] = top;
+    // static friction: cloth resting on the seat stays put unless it is pulled harder than the seat grips, so the
+    // drape doesn't creep toward the edges and slip off a bit at a time; past that it slides, slowed by the grip
+    const tx = P[q] - Q[q], tz = P[q + 2] - Q[q + 2], tl = Math.hypot(tx, tz), grip = 0.0004;
+    const k = tl <= grip ? 0 : (tl - grip) / tl;
+    P[q] = Q[q] + tx * k; P[q + 2] = Q[q + 2] + tz * k;
     Q[q] = lerp(Q[q], P[q], 0.6); Q[q + 2] = lerp(Q[q + 2], P[q + 2], 0.6);
   }
   pushSphere(k, C, r) {
     const P = this.pts, dx = P[k] - C.x, dy = P[k + 1] - C.y, dz = P[k + 2] - C.z, d = Math.hypot(dx, dy, dz);
-    if (d < r && d > 1e-6) { const s = (d + (r - d) * this.soft) / d; P[k] = C.x + dx * s; P[k + 1] = C.y + dy * s; P[k + 2] = C.z + dz * s; }
+    if (d < r && d > 1e-6) { const s = (d + (r - d) * this.soft) / d; this.pushTo(k, C.x + dx * s, C.y + dy * s, C.z + dz * s); }
   }
 }
 // Body surface around the spine at height y, in direction d (figure-local, horizontal): the spine centre there,
@@ -835,7 +863,7 @@ const hair = new Cloth({
 // The top edge sits on her skin (measured from the mesh); down to the waist the cloth is held onto her back,
 // below it hangs free and swings.
 const cloak = new Cloth({
-  bone: 'Chest', N: 15, M: 19, len: 0.34, closed: false, spread: 0.09, drag: 2.4, bend: 0.55, soft: 0.3, seat: true,   // legs ease the cloth aside instead of shoving it
+  bone: 'Chest', N: 15, M: 19, len: 0.34, closed: false, spread: 0.09, drag: 2.4, bend: 0.55, soft: 0.3, absorb: 0.8, seat: true,   // legs ease the cloth aside instead of shoving it
   dirs() { return Array.from({ length: this.N }, (_, i) => { const t = lerp(-1.75, 1.75, i / (this.N - 1)); return [Math.sin(t), -Math.cos(t)]; }); },
   anchorsLocal() {
     // the top edge: pinned to the skin vertices round the back of her neck and over her shoulders
