@@ -496,6 +496,25 @@ function solveLeg(side, A, fwd = new THREE.Vector3(Math.sin(rig.yaw), 0, Math.co
   aimBone(bn('LowerLeg.' + side), bn('LowerLeg.' + side + '_end'), stageG.localToWorld(ank));
 }
 // 3D two-bone IK to the planted ankles; knees point the way the body faces
+// Her real hip joints aren't level (the right sits higher), so a nearly straight pose (standing, staring, a support
+// leg, the planted legs of a turn) can ask one leg to reach further than it is long: the solver stops at full length
+// and that foot hangs a few millimetres above the floor. Before the legs are solved, the body is lowered by exactly
+// the shortfall, so both feet always reach the ground.
+function reachLegs(targets) {
+  const lmax = L1 + L2 - 0.0004; let drop = 0;
+  for (const side of ['R', 'L']) {
+    const A = targets[side].clone(); A.y -= SHADOW_FLOOR * A.z + SOLE_SINK;   // where solveLeg will aim
+    const Hp = stageG.worldToLocal(bn('UpperLeg.' + side).getWorldPosition(new THREE.Vector3())), d = A.clone().sub(Hp);
+    if (d.length() <= lmax) continue;
+    const need = Math.sqrt(Math.max(0, lmax * lmax - d.x * d.x - d.z * d.z));
+    drop = Math.max(drop, (Hp.y - A.y) - need);
+  }
+  rig.legDrop = drop;
+  if (drop <= 0) return;
+  const body = bn('Body'), w = body.getWorldPosition(new THREE.Vector3()), down = w.clone(); down.y -= drop * stageG.scale.y;
+  body.position.add(body.parent.worldToLocal(down.clone()).sub(body.parent.worldToLocal(w.clone())));
+  body.updateMatrixWorld(true);
+}
 function placeTurnLegs() {
   const fwd = new THREE.Vector3(Math.sin(rig.yaw), 0, Math.cos(rig.yaw));
   for (const side of ['R', 'L']) {
@@ -590,6 +609,10 @@ function applyFigure(dt) {
   // legs: thigh toward the knee, shin toward the ankle, then the foot bone placed on the ankle with its pitch
   // The pose's angles say where each ankle goes (relative to the ideal hip point); the leg is then solved in 3D
   // from her real hip joint to exactly that ankle, so feet land where the gait puts them.
+  {
+    const ankAt = (side, th, kn) => stageG.worldToLocal(L(rig.lat[side].hip, p.hipY - Math.cos(th) * L1 - Math.cos(th - kn) * L2, Math.sin(th) * L1 + Math.sin(th - kn) * L2));
+    reachLegs(rig.turnLegs ? { R: rig.turnLegs.R.pos, L: rig.turnLegs.L.pos } : { R: ankAt('R', p.thighA, p.kneeA), L: ankAt('L', p.thighB, p.kneeB) });
+  }
   if (rig.turnLegs) placeTurnLegs(); else
   for (const [side, th, kn, pi] of [['R', p.thighA, p.kneeA, p.pitchA], ['L', p.thighB, p.kneeB, p.pitchB]]) {
     const lat = rig.lat[side].hip;
