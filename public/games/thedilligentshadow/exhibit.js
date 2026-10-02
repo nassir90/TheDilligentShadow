@@ -1722,6 +1722,8 @@ function pxPerRadian() {
 }
 // the pedestal: a click (no drag) on it zooms between the close-up and the whole room
 function hitsPlinth() { ray.setFromCamera(ptr, camera); return ray.intersectObject(plinth, false).length > 0; }
+// the plinth's front face (the one facing the visitor), not its top
+function hitsPlinthFront() { ray.setFromCamera(ptr, camera); const h = ray.intersectObject(plinth, false)[0]; return !!h && h.face.normal.z > 0.5; }
 let press = null;
 stage.addEventListener('pointerdown', e => {
   setPtr(e); pointerIn = true;
@@ -1798,17 +1800,20 @@ function toggleView() {
 addEventListener('keydown', e => { if (e.key === 'Enter' && !(e.target instanceof HTMLAnchorElement) && scrollY < 1) toggleView(); });
 
 // Touch screens: OrbitControls cancels every touch on the canvas, so the page could never scroll from it. In the
-// close-up a touch that starts on the plinth (not the switch) is kept from the controls, and the browser scrolls the
-// page itself (the canvas allows vertical panning there), momentum and all.
+// close-up a touch that starts on the plinth's front face is kept from the controls, and the browser scrolls the page
+// itself (the canvas allows vertical panning there), momentum and all. The top, with the switch, is left alone.
 let plinthSwipe = false;
 stage.addEventListener('touchstart', e => {
   plinthSwipe = false;
   if (view !== 'close' || flyTo || e.touches.length !== 1) return;
   setPtr(e.touches[0]);
-  if (hitsSwitch() || !hitsPlinth()) return;
+  // a touch on the switch drags it; grabbing the switch turns the controls off, and with them their preventDefault,
+  // so stop the page panning under the finger here
+  if (hitsSwitch()) { e.preventDefault(); return; }
+  if (!hitsPlinthFront()) return;
   plinthSwipe = true;
   e.stopPropagation();
-}, { capture: true, passive: true });
+}, { capture: true, passive: false });
 for (const type of ['touchmove', 'touchend', 'touchcancel'])
   stage.addEventListener(type, e => {
     if (!plinthSwipe) return;
@@ -1941,6 +1946,12 @@ const creditFX = (() => {
   if (document.fonts) document.fonts.ready.then(() => { dirty = true; });
   return {
     draw() {
+      // In the settled close-up the line always sits on the light plinth, where this pass would paint it plain black,
+      // so the page shows the HTML text itself in black (index.html: body.closeup): native text scrolls with the page
+      // at once, where a pass drawn into the canvas trails it by a frame or two.
+      const native = view === 'close' && !flyTo;
+      document.body.classList.toggle('closeup', native);
+      if (native) return;
       if (dirty) build();
       if (!box) return;
       place();

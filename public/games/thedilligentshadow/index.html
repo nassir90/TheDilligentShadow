@@ -39,6 +39,9 @@ body { background: var(--wall); color: var(--text); overflow: hidden; }
   pointer-events: none;
 }
 #credit .sep { padding: 0 0.6em; opacity: .7; }
+/* in the settled close-up the line is over the light plinth: shown as plain black HTML text (exhibit.js), so it
+   scrolls with the page without the canvas's frame of lag */
+body.closeup #credit { color: #000; }
 #credit a { color: inherit; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; pointer-events: auto; }
 #credit a:focus-visible { outline: 1px dashed #808080; outline-offset: 3px; }
 
