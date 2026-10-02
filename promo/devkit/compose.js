@@ -30,8 +30,106 @@ async function clipFrame(name, t) {
   return { img: c.imgs.get(i), meta: c.meta.frames[i] };
 }
 function cover(g, img, x, y, w, h, fx = 0.5, fy = 0.5) {
-  const s = Math.max(w / img.width, h / img.height), sw = w / s, sh = h / s;
-  g.drawImage(img, (img.width - sw) * fx, (img.height - sh) * fy, sw, sh, x, y, w, h);
+  const s = Math.max(w / img.width, h / img.height), sw = w / s, sh = h / s, sx = (img.width - sw) * fx, sy = (img.height - sh) * fy;
+  g.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  return (px, py) => [x + (px - sx) * s, y + (py - sy) * s];   // clip pixel → output pixel
+}
+
+// ---- "ink": the credit line's rule. Things drawn into the ink mask are painted, pixel by pixel, black where the
+// frame behind is light and white where it is dark (the mask's alpha is how much). ----
+const COUR = '"Courier New", Courier, monospace';
+const ink = document.createElement('canvas'); ink.width = W; ink.height = H; const ig = ink.getContext('2d');
+function applyInk(g) {
+  const fr = g.getImageData(0, 0, W, H), d = fr.data, m = ig.getImageData(0, 0, W, H).data;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = m[i + 3] / 255; if (!a) continue;
+    const v = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) > 128 ? 0 : 255;
+    d[i] += (v - d[i]) * a; d[i + 1] += (v - d[i + 1]) * a; d[i + 2] += (v - d[i + 2]) * a;
+  }
+  g.putImageData(fr, 0, 0);
+}
+// a square block with the word cut out of it: the whole block is black or white, by the average behind it
+function cutLabel(g, text, x, y, size = 30) {
+  g.save(); g.font = `700 ${size}px ${SERIF}`; const w = Math.ceil(g.measureText(text).width + size * 0.9), h = Math.ceil(size * 1.45);
+  const px = g.getImageData(x, y, w, h).data; let lum = 0; for (let i = 0; i < px.length; i += 4) lum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+  lum /= px.length / 4;
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const cg = c.getContext('2d');
+  cg.fillStyle = lum > 128 ? '#000' : '#fff'; cg.fillRect(0, 0, w, h);
+  cg.globalCompositeOperation = 'destination-out'; cg.font = g.font; cg.textBaseline = 'middle'; cg.fillText(text, size * 0.45, h / 2 + 1);
+  g.drawImage(c, x, y); g.restore();
+}
+// annotations recorded with a clip (in clip pixels), drawn into the ink mask at output scale
+function drawAnn(list, map) {
+  ig.save(); ig.strokeStyle = '#fff'; ig.fillStyle = '#fff'; ig.lineWidth = 3; ig.lineCap = 'round'; ig.lineJoin = 'round';
+  for (const a of list || []) {
+    ig.globalAlpha = a.o ?? 1;
+    if (a.k === 'dot') { const [x, y] = map(a.x, a.y); ig.beginPath(); ig.arc(x, y, a.r || 7, 0, 7); a.fill === false ? ig.stroke() : ig.fill(); }
+    else if (a.k === 'line') { ig.lineWidth = a.w || 3; ig.beginPath(); a.pts.forEach((p, i) => { const [x, y] = map(...p); i ? ig.lineTo(x, y) : ig.moveTo(x, y); }); ig.stroke(); ig.lineWidth = 3; }
+    else if (a.k === 'call') {
+      // circle on the feature, a leader to the label, and the leader runs on to underline it
+      const [cx, cy] = map(a.x, a.y), r = a.r || 34;
+      ig.font = `400 ${a.size || 32}px ${COUR}`; const tw = ig.measureText(a.text).width;
+      // keep the label on screen: flip it to the other side if it would run off an edge
+      let dx = a.dx; if (cx + dx - tw < 24 && dx < 0) dx = -dx; else if (cx + dx + tw > W - 24 && dx > 0) dx = -dx;
+      const lx = cx + dx, ly = cy + a.dy, left = dx < 0;
+      const ux0 = lx, ux1 = left ? lx - tw : lx + tw, uy = ly + 9;
+      const ang = Math.atan2(uy - cy, ux0 - cx), ex = cx + Math.cos(ang) * r, ey = cy + Math.sin(ang) * r;
+      ig.beginPath(); ig.arc(cx, cy, r, 0, 7); ig.stroke();
+      ig.beginPath(); ig.moveTo(ex, ey); ig.lineTo(ux0, uy); ig.lineTo(ux1, uy); ig.stroke();
+      const dir = left ? Math.PI : 0; ig.beginPath(); ig.moveTo(ux0, uy); ig.lineTo(ux0 - Math.cos(dir - 0.5) * 14, uy - Math.sin(dir - 0.5) * 14); ig.moveTo(ux0, uy); ig.lineTo(ux0 - Math.cos(dir + 0.5) * 14, uy - Math.sin(dir + 0.5) * 14); ig.stroke();
+      ig.textAlign = left ? 'right' : 'left'; ig.fillText(a.text, ux0 + (left ? -4 : 4), ly);
+      ig.textAlign = 'left';
+    }
+  }
+  ig.restore();
+}
+function inkSubtitle(text, alpha, y = 1730) {
+  ig.save(); ig.globalAlpha = alpha; ig.font = `400 50px ${SERIF}`; ig.textAlign = 'center'; ig.fillStyle = '#fff';
+  const lines = wrap(ig, text, 940), lh = 60, y0 = y - (lines.length - 1) * lh;
+  lines.forEach((l, i) => ig.fillText(l, W / 2, y0 + i * lh)); ig.restore();
+}
+function inkTitle(E, t) {
+  const T = E.titleCard; if (!T) return;
+  const a = ease(t / 0.6) * (1 - ease((t - (T.hold || 3.2)) / 0.9)); if (a <= 0) return;
+  ig.save(); ig.globalAlpha = a; ig.fillStyle = '#fff'; ig.textAlign = 'center';
+  ig.font = `italic 400 40px ${SERIF}`; ig.fillText(T.kicker || '', W / 2, 250);
+  ig.font = `400 112px ${SERIF}`; ig.fillText(T.title, W / 2, 370); ig.restore();
+}
+function inkStat(L, tl) {
+  const k = ease((tl - (L.delay || 0.4)) / (L.count || 1.2)), v = L.from + (L.to - L.from) * k;
+  ig.save(); ig.globalAlpha = ease(tl / 0.3); ig.fillStyle = '#fff'; ig.textAlign = 'center';
+  ig.font = `italic 400 40px ${SERIF}`; ig.fillText(L.label, W / 2, (L.y ?? 600) - 120);
+  ig.font = `400 170px ${SERIF}`; ig.fillText(v.toFixed(L.dp ?? 0) + (L.unit || ''), W / 2, L.y ?? 600);
+  if (L.note) { ig.font = `400 32px ${COUR}`; ig.fillText(L.note, W / 2, (L.y ?? 600) + 70); }
+  ig.restore();
+}
+// code: a plain black box, white monospace, inset so the video shows round its sides and below it
+function plainCode(g, L, tl) {
+  const sn = L.snip ? snippet(...L.snip) : { text: L.text, line: 1 };
+  const size = L.size || 30, lh = size * 1.32, x = L.x ?? 48, w = L.w ?? (W - 96), pad = 30;
+  g.save(); g.font = `700 ${size}px ${COUR}`;
+  // long lines wrap inside the box, continuing with an extra indent
+  const rows = [];
+  for (const ln of sn.text.split('\n')) {
+    const ind = ln.match(/^ */)[0]; let rest = ln;
+    while (g.measureText(rest).width > w - pad * 2) {
+      let k = rest.length; while (k > ind.length + 8 && g.measureText(rest.slice(0, k)).width > w - pad * 2) k--;
+      const sp = rest.lastIndexOf(' ', k); if (sp > ind.length + 8) k = sp;
+      rows.push(rest.slice(0, k)); rest = ind + '    ' + rest.slice(k).trimStart();
+    }
+    rows.push(rest);
+  }
+  const h = rows.length * lh + pad * 1.6, y = L.y ?? (H - 430 - h), a = ease(tl / 0.35);
+  g.globalAlpha = a * 0.84; g.fillStyle = '#000'; g.fillRect(x, y, w, h); g.globalAlpha = a; g.fillStyle = '#fff';
+  const total = rows.join('').length, reveal = L.typing === false ? 1 : clamp((tl - 0.2) / (L.typeDur || 1.4), 0, 1);
+  let shown = Math.floor(total * reveal), cx = x + pad, cy = y + pad + size * 0.8;
+  rows.forEach((r, i) => {
+    const yy = y + pad + size * 0.8 + i * lh, piece = r.slice(0, Math.max(0, shown)); shown -= r.length;
+    g.fillText(piece, x + pad, yy);
+    if (piece.length || i === 0) { cx = x + pad + g.measureText(piece).width; cy = yy; }
+  });
+  if (reveal < 1 && Math.floor(tl * 3) % 2 === 0) g.fillRect(cx + 3, cy - size * 0.8, size * 0.55, size);
+  g.restore();
 }
 function pill(g, text, x, y, color, size = 30) {
   g.save(); g.font = `700 ${size}px ${SANS}`; const w = g.measureText(text).width + size * 1.1, h = size * 1.6;
@@ -210,12 +308,16 @@ function timeline(E, vo) {
   return { segs, cues, total: t };
 }
 
+let STYLE = 'classic';
 async function drawClipLayer(g, L, tl, rect) {
   const { img, meta } = await clipFrame(L.clip, L._from + tl * (L.speed || 1));
   const [x, y, w, h] = rect || L.rect || [0, 0, W, H];
   g.save(); if (L.alpha != null) g.globalAlpha = L.alpha;
-  cover(g, img, x, y, w, h, L.fx ?? 0.5, L.fy ?? 0.5); g.restore();
-  if (L.label) pill(g, L.label, x + 30, y + 30, L.labelColor || (L.label.startsWith('BEFORE') ? C.red : C.green));
+  const map = cover(g, img, x, y, w, h, L.fx ?? 0.5, L.fy ?? 0.5); g.restore();
+  if (STYLE === 'ink') {
+    if (meta.ann && L.ann !== false) { ig.save(); ig.beginPath(); ig.rect(x, y, w, h); ig.clip(); drawAnn(meta.ann, map); ig.restore(); }
+    if (L.label) L._cut = [L.label, x + 36, y + (L.labelY ?? 36)];
+  } else if (L.label) pill(g, L.label, x + 30, y + 30, L.labelColor || (L.label.startsWith('BEFORE') ? C.red : C.green));
   return meta;
 }
 
@@ -225,7 +327,7 @@ async function run(id, opts = {}) {
   const E = (0, eval)(await get(`/videos/${id}/edl.js`, 'text'));
   if (!E.lines) E.lines = await get(`/videos/${id}/script.json`);
   const vo = E.lines.length ? await get(`/videos/${id}/vo.json`) : { lines: [] };
-  const TL = timeline(E, vo);
+  const TL = timeline(E, vo); STYLE = E.style || 'classic';
   for (const s of TL.segs) for (const L of s.layers || []) {
     for (const k of ['clip', 'a', 'b']) { const r = k === 'clip' ? L : L[k]; if (r && r.clip) await loadClip(r.clip); }
     if (L.series) for (const s2 of L.series) if (s2.clip) await loadClip(s2.clip);
@@ -239,14 +341,15 @@ async function run(id, opts = {}) {
     const t = f / FPS;
     if (only && (t < only[0] || t >= only[1] || (f % (opts.every || 1)))) continue;
     const s = TL.segs.find(s => t >= s.t0 && t < s.t0 + s.dur) || TL.segs[TL.segs.length - 1], tl = t - s.t0;
-    g.fillStyle = s.bg || C.bg; g.fillRect(0, 0, W, H);
+    g.fillStyle = s.bg || C.bg; g.fillRect(0, 0, W, H); ig.clearRect(0, 0, W, H);
+    const cuts = [];
     for (const L of s.layers || []) {
       if (L.type === 'clip') await drawClipLayer(g, L, tl);
       else if (L.type === 'split') { await drawClipLayer(g, L.a, tl, [0, L.top ?? 0, W, (L.h ?? 960)]); await drawClipLayer(g, L.b, tl, [0, (L.top ?? 0) + (L.h ?? 960), W, (L.h ?? 960)]); g.fillStyle = '#0b0c0f'; g.fillRect(0, (L.top ?? 0) + (L.h ?? 960) - 3, W, 6); }
-      else if (L.type === 'code') code(g, L, tl);
+      else if (L.type === 'code') { if (STYLE === 'ink') { L._code = true; } else code(g, L, tl); }
       else if (L.type === 'graph') graph(g, L, tl);
       else if (L.type === 'text') textLayer(g, L, tl);
-      else if (L.type === 'stat') bigStat(g, L, tl);
+      else if (L.type === 'stat') { if (STYLE === 'ink') inkStat(L, tl); else bigStat(g, L, tl); }
       else if (L.type === 'end') endCard(g, L, tl);
       else if (L.type === 'dim') { g.fillStyle = `rgba(0,0,0,${L.a ?? 0.5})`; g.fillRect(...(L.rect || [0, 0, W, H])); }
       else if (L.type === 'diagram') {
@@ -256,8 +359,15 @@ async function run(id, opts = {}) {
       }
       else if (L.type === 'draw') L.fn(g, tl, { W, H, C, SANS, MONO, SERIF, ease, clips });
     }
-    header(g, E);
-    for (const c of TL.cues) if (c.text) { const b = c.at + (c.b - c.a) + 0.3; if (t >= c.at - 0.1 && t <= b + 0.15) subtitle(g, c.text, Math.min(1, (t - (c.at - 0.1)) / 0.15, (b + 0.15 - t) / 0.15)); }
+    if (STYLE === 'ink') {
+      inkTitle(E, t);
+      for (const c of TL.cues) if (c.text) { const b = c.at + (c.b - c.a) + 0.3; if (t >= c.at - 0.1 && t <= b + 0.15) inkSubtitle(c.text, Math.min(1, (t - (c.at - 0.1)) / 0.15, (b + 0.15 - t) / 0.15)); }
+      applyInk(g);
+      for (const L of s.layers || []) { for (const r of [L, L.a, L.b]) if (r && r._cut) { cutLabel(g, ...r._cut); r._cut = null; } if (L._code) plainCode(g, L, tl); }
+    } else {
+      header(g, E);
+      for (const c of TL.cues) if (c.text) { const b = c.at + (c.b - c.a) + 0.3; if (t >= c.at - 0.1 && t <= b + 0.15) subtitle(g, c.text, Math.min(1, (t - (c.at - 0.1)) / 0.15, (b + 0.15 - t) / 0.15)); }
+    }
     if (t < 0.5) { g.fillStyle = `rgba(0,0,0,${1 - ease(t / 0.5)})`; g.fillRect(0, 0, W, H); }
     if (t > TL.total - 0.8) { g.fillStyle = `rgba(0,0,0,${ease((t - (TL.total - 0.8)) / 0.8)})`; g.fillRect(0, 0, W, H); }
     if (opts.preview) { (st.preview ||= []).push(cv.toDataURL('image/jpeg', 0.6)); }
