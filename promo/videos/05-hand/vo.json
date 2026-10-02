@@ -1,0 +1,53 @@
+{
+ "duration": 33.8,
+ "lines": [
+  {
+   "line": "How it works: the visitor's hand.",
+   "start": 0.0,
+   "end": 2.555
+  },
+  {
+   "line": "It's a skinned hand model from the WebXR input profiles, with a bone for every knuckle.",
+   "start": 3.284,
+   "end": 9.079
+  },
+  {
+   "line": "The fingertip goes exactly where it's sent. Everything else hangs off it, on springs.",
+   "start": 9.656,
+   "end": 14.926
+  },
+  {
+   "line": "Speed and acceleration tilt and twist the hand, and flick the other fingers, before they settle.",
+   "start": 15.548,
+   "end": 21.817
+  },
+  {
+   "line": "On the switch, the finger flexes as she leans on it, and dents with every kick.",
+   "start": 22.685,
+   "end": 27.546
+  },
+  {
+   "line": "And it fades out at the wrist. Its shadow is dithered, so it fades the same way.",
+   "start": 28.279,
+   "end": 33.407
+  }
+ ],
+ "heard": [
+  "How it works",
+  "the visitor's hand",
+  "It's a skinned hand model from the Web XR input profiles with a bone for every knuckle.",
+  "The fingertip goes exactly where it's sent.",
+  "Everything else",
+  "Hangs on it.",
+  "on springs.",
+  "Speed and acceleration.",
+  "tilts and twists the hand.",
+  "and flick the other fingers.",
+  "before they settle.",
+  "On the switch, the finger flexes as she leans on it.",
+  "and dense with every kick.",
+  "And it fades out at the rest.",
+  "Its shadow is tethered.",
+  "So it fades the same way."
+ ]
+}

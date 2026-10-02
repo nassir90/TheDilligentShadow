@@ -192,7 +192,7 @@
       if (t > TOTAL - 1.2) { g.fillStyle = `rgba(0,0,0,${ease((t - (TOTAL - 1.2)) / 1.2)})`; g.fillRect(0, 0, W, H); }
       if (preview) { st.preview = (st.preview || []).concat(out.toDataURL('image/jpeg', 0.6)); }
       else {   // encode synchronously and send in batches: async encoding crawls when the page is in the background
-        batch.push(`f${String(f).padStart(5, '0')}.jpg ${out.toDataURL('image/jpeg', 0.92).split(',')[1]}`);
+        batch.push(`frames/f${String(f).padStart(5, "0")}.jpg ${out.toDataURL('image/jpeg', 0.92).split(',')[1]}`);
         if (batch.length >= 30) { await fetch(`${sink}/batch`, { method: 'POST', body: batch.join('\n') }); batch = []; }
       }
       st.frame++;

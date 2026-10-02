@@ -1,0 +1,70 @@
+{
+ "duration": 50.68,
+ "lines": [
+  {
+   "line": "Devlog. Her feet used to slide.",
+   "start": 0.0,
+   "end": 3.656
+  },
+  {
+   "line": "The legs just swung on a timer, while the body glided along at a constant speed.",
+   "start": 4.495,
+   "end": 9.962
+  },
+  {
+   "line": "So instead of animating legs, I plant feet.",
+   "start": 11.025,
+   "end": 14.736
+  },
+  {
+   "line": "The walk follows clinical gait timing. Heel strike. Foot flat. Heel off. Toe off. Then the swing.",
+   "start": 15.663,
+   "end": 23.673
+  },
+  {
+   "line": "A planted foot is a fixed point on the ledge. The hips move on, and each leg is solved to reach its foot.",
+   "start": 24.781,
+   "end": 31.816
+  },
+  {
+   "line": "Turning used to spin her on the spot, and her feet skated nearly ten centimetres.",
+   "start": 33.141,
+   "end": 38.218
+  },
+  {
+   "line": "Now she steps round in three steps, and every foot lands where it's put.",
+   "start": 39.015,
+   "end": 43.677
+  },
+  {
+   "line": "Walking, turning, kicking, sitting down. Under a millimetre of slip.",
+   "start": 44.661,
+   "end": 50.328
+  }
+ ],
+ "heard": [
+  "Devlog.",
+  "Her feet.",
+  "used to slide.",
+  "The legs just swung on a timer.",
+  "While the body glided along at a constant speed,",
+  "So, instead of animating legs,",
+  "I plant feet.",
+  "The walk follows clinical gate timing.",
+  "Heel strike.",
+  "Foot flat.",
+  "He'll cough off.",
+  "Tof.",
+  "then the swing.",
+  "A planted foot is a fixed point on the ledge.",
+  "The hips move on and each leg is solved to reach its foot.",
+  "Turning used to spin her on the spot.",
+  "and her feet skated nearly 10 cm.",
+  "Now, she steps round in three steps.",
+  "And every foot lands where it's put.",
+  "Walking, turning,",
+  "Clicking.",
+  "Sitting down.",
+  "Under a millimeter of sleep."
+ ]
+}

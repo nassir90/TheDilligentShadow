@@ -1,0 +1,274 @@
+// Compositor: builds a video's frames from its edit list (videos/<id>/edl.js), the clips recorded by rec.js, the
+// narration timings (videos/<id>/vo.json) and code pulled live from exhibit.js. Runs in compose.html, served by
+// framesink.py; posts frames to videos/<id>/frames/ and the audio cue list to videos/<id>/timeline.json.
+const W = 1080, H = 1920, FPS = 30;
+const SERIF = '"Times New Roman", Times, serif', MONO = 'Menlo, "SF Mono", Consolas, monospace', SANS = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+const ease = k => k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const C = { bg: '#0b0c0f', panel: 'rgba(14,16,21,0.94)', ink: '#e9ecf1', dim: '#8b93a1', red: '#ff5a6e', green: '#54e08a', blue: '#5ab8ff', amber: '#ffb02e', pink: '#ff6fa8', cyan: '#35d0ff' };
+
+const get = async (p, as = 'json') => { const r = await fetch(p + (p.includes('?') ? '&' : '?') + 'nc=' + Date.now()); if (!r.ok) throw new Error(p + ' ' + r.status); return as === 'json' ? r.json() : r.text(); };
+let SRC = '';
+// lines of exhibit.js starting at the line containing `marker` (the n-th match), `count` long
+function snippet(marker, count, nth = 0) {
+  const L = SRC.split('\n'); let i = -1;
+  for (let k = 0, seen = 0; k < L.length; k++) if (L[k].includes(marker)) { if (seen++ === nth) { i = k; break; } }
+  if (i < 0) throw new Error('snippet not found: ' + marker);
+  const lines = L.slice(i, i + count), pad = Math.min(...lines.filter(l => l.trim()).map(l => l.match(/^ */)[0].length));
+  return { text: lines.map(l => l.slice(pad)).join('\n'), line: i + 1 };
+}
+
+// ---- clips ----
+const clips = {};
+async function loadClip(name) { if (!clips[name]) clips[name] = { meta: await get(`/clips/${name}/meta.json`), imgs: new Map() }; return clips[name]; }
+async function clipFrame(name, t) {
+  const c = clips[name], n = c.meta.frames.length, i = clamp(Math.round(t * c.meta.fps), 0, n - 1);
+  if (!c.imgs.has(i)) {
+    const im = new Image(); im.src = `/clips/${name}/f${String(i).padStart(5, '0')}.jpg`; await im.decode(); c.imgs.set(i, im);
+    for (const k of c.imgs.keys()) if (k < i - 4 || k > i + 4) c.imgs.delete(k);
+  }
+  return { img: c.imgs.get(i), meta: c.meta.frames[i] };
+}
+function cover(g, img, x, y, w, h, fx = 0.5, fy = 0.5) {
+  const s = Math.max(w / img.width, h / img.height), sw = w / s, sh = h / s;
+  g.drawImage(img, (img.width - sw) * fx, (img.height - sh) * fy, sw, sh, x, y, w, h);
+}
+function pill(g, text, x, y, color, size = 30) {
+  g.save(); g.font = `700 ${size}px ${SANS}`; const w = g.measureText(text).width + size * 1.1, h = size * 1.6;
+  g.fillStyle = color; g.beginPath(); g.roundRect(x, y, w, h, h / 2); g.fill();
+  g.fillStyle = '#0b0c0f'; g.textBaseline = 'middle'; g.fillText(text, x + size * 0.55, y + h / 2 + 1); g.restore(); return w;
+}
+
+// ---- syntax-highlighted code panel ----
+const KW = /\b(const|let|var|function|return|if|else|for|of|in|new|this|class|while|break|case|switch|true|false|null|undefined|typeof|async|await)\b/;
+function tokens(line) {
+  const out = []; let s = line;
+  const rules = [[/^\/\/.*/, '#6f7a8a'], [/^(['"`])(?:\\.|(?!\1).)*\1/, '#a8e3a0'], [/^\d+(\.\d+)?(e-?\d+)?/, '#ffb86b'],
+    [/^[A-Za-z_$][\w$]*(?=\s*\()/, '#7cc7ff'], [/^[A-Za-z_$][\w$]*/, null], [/^\s+/, null], [/^./, '#c9cfd8']];
+  while (s.length) for (const [re, col] of rules) {
+    const m = s.match(re); if (!m) continue;
+    let c = col; if (col === null) c = KW.test(m[0]) && m[0].match(KW)[0] === m[0] ? '#ff7ab6' : '#e6e9ee';
+    out.push([m[0], c]); s = s.slice(m[0].length); break;
+  }
+  return out;
+}
+function code(g, L, tl) {
+  const { x = 40, y = 980, w = 1000, size = 25, title = 'exhibit.js' } = L;
+  const sn = L.snip ? snippet(...L.snip) : { text: L.text, line: 1 };
+  const lines = sn.text.split('\n'), lh = size * 1.45, h = L.h || (lines.length * lh + 110);
+  const a = ease(tl / 0.35);
+  g.save(); g.globalAlpha = a;
+  g.fillStyle = C.panel; g.beginPath(); g.roundRect(x, y, w, h, 18); g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.06)'; g.beginPath(); g.roundRect(x, y, w, 58, [18, 18, 0, 0]); g.fill();
+  ['#ff5f57', '#febc2e', '#28c840'].forEach((c, i) => { g.fillStyle = c; g.beginPath(); g.arc(x + 32 + i * 28, y + 29, 8, 0, 7); g.fill(); });
+  g.fillStyle = C.dim; g.font = `500 24px ${MONO}`; g.fillText(`${title}${L.snip ? ' : ' + sn.line : ''}`, x + 120, y + 37);
+  g.font = `400 ${size}px ${MONO}`; g.textBaseline = 'alphabetic';
+  const reveal = L.type === 'code' && L.typing !== false ? clamp((tl - 0.2) / (L.typeDur || 1.4), 0, 1) : 1;
+  const total = sn.text.length; let shown = Math.floor(total * reveal), cx, cy;
+  const hl = L.hl || [];
+  lines.forEach((ln, i) => {
+    const yy = y + 100 + i * lh;
+    if (hl.some(([a2, b2]) => i >= a2 && i <= b2)) { g.fillStyle = 'rgba(90,184,255,0.13)'; g.fillRect(x + 4, yy - size * 1.05, w - 8, lh); }
+    g.fillStyle = '#4b5361'; g.fillText(String(sn.line + i).padStart(4), x + 14, yy);
+    let xx = x + 100;
+    for (const [tx, col] of tokens(ln)) {
+      if (shown <= 0) break;
+      const piece = tx.slice(0, shown); shown -= piece.length;
+      g.fillStyle = col; g.fillText(piece, xx, yy); xx += g.measureText(piece).width;
+      if (xx > x + w - 16) break;
+    }
+    shown -= 1; cx = xx; cy = yy;
+  });
+  if (reveal < 1 && Math.floor(tl * 3) % 2 === 0) { g.fillStyle = C.blue; g.fillRect(cx + 2, cy - size * 0.85, size * 0.55, size); }
+  g.restore();
+}
+
+// ---- a line chart drawn from recorded data (or given arrays), revealed over time ----
+function graph(g, L, tl) {
+  const { x = 60, y = 1000, w = 960, h = 520, title = '', unit = '', ymax } = L;
+  const a = ease(tl / 0.3);
+  g.save(); g.globalAlpha = a;
+  g.fillStyle = C.panel; g.beginPath(); g.roundRect(x, y, w, h, 18); g.fill();
+  g.fillStyle = C.ink; g.font = `600 30px ${SANS}`; g.fillText(title, x + 30, y + 52);
+  const px = x + 90, py = y + 90, pw = w - 130, ph = h - 160;
+  const ser = L.series.map(s => s.data || clips[s.clip].meta.frames.slice(Math.round((s.from || 0) * 30), Math.round(((s.from || 0) + L.dur) * 30)).map(m => s.f(m)));
+  const ym = ymax || Math.max(...ser.flat()) * 1.1 || 1;
+  g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 1; g.fillStyle = C.dim; g.font = `400 22px ${MONO}`;
+  for (let k = 0; k <= 4; k++) { const yy = py + ph - ph * k / 4; g.beginPath(); g.moveTo(px, yy); g.lineTo(px + pw, yy); g.stroke(); g.fillText(String(+(ym * k / 4).toPrecision(2)), x + 16, yy + 7); }
+  g.fillText(unit, px, py - 16); g.fillText(`${L.dur}s`, px + pw - 40, py + ph + 34); g.fillText('0', px, py + ph + 34);
+  const prog = clamp((tl - 0.3) / (L.revealDur || 2.5), 0, 1);
+  ser.forEach((d, si) => {
+    const s = L.series[si], n = Math.max(1, Math.floor(d.length * prog));
+    g.strokeStyle = s.color; g.lineWidth = 4; g.lineJoin = 'round'; g.beginPath();
+    for (let i = 0; i < n; i++) { const xx = px + pw * i / (d.length - 1), yy = py + ph - ph * clamp(d[i] / ym, 0, 1); i ? g.lineTo(xx, yy) : g.moveTo(xx, yy); }
+    g.stroke();
+    g.fillStyle = s.color; g.font = `600 26px ${SANS}`; g.fillText('● ' + s.label, px + 10 + si * (pw / L.series.length), y + h - 22);
+  });
+  g.restore();
+}
+
+// ---- the state machine diagram, lit by what she is doing in a clip ----
+function diagram(g, L, tl, mode) {
+  const { x = 0, y = 120, nodes, edges } = L;
+  const pos = Object.fromEntries(nodes.map(n => [n.id, n]));
+  g.save(); g.translate(x, y);
+  g.lineWidth = 3;
+  for (const [a, b, bend = 0] of edges) {
+    const A = pos[a], B = pos[b], mx = (A.x + B.x) / 2 + bend * (B.y - A.y) * 0.3, my = (A.y + B.y) / 2 - bend * (B.x - A.x) * 0.3;
+    const live = a === L._prev && b === mode;
+    g.strokeStyle = live ? C.amber : 'rgba(255,255,255,0.22)';
+    g.beginPath(); g.moveTo(A.x, A.y); g.quadraticCurveTo(mx, my, B.x, B.y); g.stroke();
+    const t = 0.82, qx = (1 - t) * (1 - t) * A.x + 2 * (1 - t) * t * mx + t * t * B.x, qy = (1 - t) * (1 - t) * A.y + 2 * (1 - t) * t * my + t * t * B.y;
+    const ang = Math.atan2(B.y - qy, B.x - qx); g.fillStyle = g.strokeStyle;
+    g.beginPath(); g.moveTo(qx + Math.cos(ang) * 14, qy + Math.sin(ang) * 14); g.lineTo(qx + Math.cos(ang + 2.5) * 14, qy + Math.sin(ang + 2.5) * 14); g.lineTo(qx + Math.cos(ang - 2.5) * 14, qy + Math.sin(ang - 2.5) * 14); g.fill();
+  }
+  for (const n of nodes) {
+    const act = n.id === mode || (n.also || []).includes(mode);
+    g.font = `600 30px ${MONO}`; const w = g.measureText(n.id).width + 44, h = 62;
+    if (act) { g.shadowColor = C.amber; g.shadowBlur = 30; }
+    g.fillStyle = act ? C.amber : 'rgba(22,25,31,0.95)'; g.strokeStyle = act ? C.amber : 'rgba(255,255,255,0.35)';
+    g.beginPath(); g.roundRect(n.x - w / 2, n.y - h / 2, w, h, 14); g.fill(); g.stroke(); g.shadowBlur = 0;
+    g.fillStyle = act ? '#16130a' : C.ink; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(n.id, n.x, n.y + 1);
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+  }
+  g.restore();
+}
+
+// ---- text ----
+function wrap(g, text, maxW) {
+  const out = [];
+  for (const para of String(text).split('\n')) { let line = ''; for (const w of para.split(' ')) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; } out.push(line); }
+  return out;
+}
+function textLayer(g, L, tl) {
+  const a = ease((tl - (L.delay || 0)) / 0.4); if (a <= 0) return;
+  g.save(); g.globalAlpha = a; g.fillStyle = L.color || C.ink; g.textAlign = L.align || 'center';
+  g.font = L.font || `400 ${L.size || 64}px ${L.face === 'mono' ? MONO : L.face === 'sans' ? SANS : SERIF}`;
+  const lines = wrap(g, L.text, L.maxW || 940), lh = (L.size || 64) * 1.25;
+  lines.forEach((l, i) => g.fillText(l, L.x ?? W / 2, (L.y ?? 900) + i * lh));
+  g.restore();
+}
+function bigStat(g, L, tl) {   // "96 mm → 0 mm" counting down
+  const k = ease((tl - (L.delay || 0.4)) / (L.count || 1.2));
+  const v = L.from + (L.to - L.from) * k;
+  g.save(); g.textAlign = 'center'; g.globalAlpha = ease(tl / 0.3);
+  g.fillStyle = C.dim; g.font = `500 34px ${SANS}`; g.fillText(L.label, L.x ?? W / 2, (L.y ?? 1000) - 110);
+  g.fillStyle = k >= 1 ? C.green : C.ink; g.font = `700 150px ${SANS}`; g.fillText(v.toFixed(L.dp ?? 0) + (L.unit || ''), L.x ?? W / 2, L.y ?? 1000);
+  if (L.note) { g.fillStyle = C.dim; g.font = `400 30px ${SANS}`; g.fillText(L.note, L.x ?? W / 2, (L.y ?? 1000) + 70); }
+  g.restore();
+}
+const knock = document.createElement('canvas'); knock.width = W; knock.height = 200;
+function endCard(g, L, tl) {
+  const k = ease(tl / 1.0);
+  g.fillStyle = `rgba(6,7,9,${0.72 * k})`; g.fillRect(0, 0, W, H);
+  const f = d => ease((tl - d) / 0.8);
+  g.save(); g.textAlign = 'center'; g.fillStyle = '#fff';
+  g.globalAlpha = f(0.3); g.font = `400 104px ${SERIF}`; g.fillText('The Diligent Shadow', W / 2, 700);
+  g.globalAlpha = f(0.8); g.font = `italic 400 48px ${SERIF}`; g.fillText('After Koya Endo', W / 2, 800);
+  g.font = `400 48px ${SERIF}`; g.fillText('Tokyo Prototype 2026', W / 2, 866);
+  g.restore();
+  const a = f(1.4); if (a <= 0) return;
+  const kg = knock.getContext('2d'), txt = 'mpts.ie/games/thedilligentshadow';
+  kg.clearRect(0, 0, W, 200); kg.font = `400 50px ${SERIF}`;
+  const tw = kg.measureText(txt).width, bw = tw + 56, bh = 84, bx = (W - bw) / 2, by = 58;
+  kg.globalCompositeOperation = 'source-over'; kg.fillStyle = '#fff'; kg.fillRect(bx, by, bw, bh);
+  kg.globalCompositeOperation = 'destination-out'; kg.textAlign = 'center'; kg.textBaseline = 'middle'; kg.fillText(txt, W / 2, by + bh / 2 + 3);
+  kg.globalCompositeOperation = 'source-over';
+  g.save(); g.globalAlpha = a; g.drawImage(knock, 0, 1180 - by); g.restore();
+}
+function subtitle(g, text, alpha, y = 1700) {
+  g.save(); g.globalAlpha = alpha; g.font = `400 46px ${SERIF}`; g.textAlign = 'center';
+  const lines = wrap(g, text, 900), lh = 58, y0 = y - (lines.length - 1) * lh;
+  const bw = Math.max(...lines.map(l => g.measureText(l).width)) + 44, bh = lines.length * lh + 24;
+  g.fillStyle = 'rgba(8,9,11,0.66)'; g.beginPath(); g.roundRect((W - bw) / 2, y0 - 46, bw, bh, 10); g.fill();
+  g.fillStyle = '#fff'; lines.forEach((l, i) => g.fillText(l, W / 2, y0 + i * lh)); g.restore();
+}
+function header(g, E) {
+  if (!E.tag) return;
+  const gr = g.createLinearGradient(0, 0, 0, 250); gr.addColorStop(0, 'rgba(8,9,12,0.85)'); gr.addColorStop(0.7, 'rgba(8,9,12,0.55)'); gr.addColorStop(1, 'rgba(8,9,12,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, W, 250);
+  g.save(); g.font = `600 26px ${MONO}`; g.fillStyle = C.amber; g.fillText(E.tag, 48, 92);
+  g.fillStyle = C.ink; g.font = `400 54px ${SERIF}`; g.fillText(E.title, 48, 160); g.restore();
+}
+
+// ---- timeline ----
+function timeline(E, vo) {
+  let t = 0; const segs = [], cues = [], cursor = {};
+  for (const s of E.segments) {
+    const line = s.say != null ? vo.lines[s.say] : null;
+    const lead = s.lead ?? 0.35, len = line ? line.end - line.start : 0;
+    const dur = Math.max(s.dur || 0, line ? lead + len + (s.tail ?? 0.5) : 0);
+    if (line) cues.push({ a: line.start, b: line.end, at: t + lead, text: E.lines[s.say].sub || E.lines[s.say].say });
+    for (const L of s.layers || []) for (const k of ['clip', 'a', 'b']) {
+      const ref = k === 'clip' ? L : L[k]; if (!ref || !ref.clip) continue;
+      if (ref.from === 'cont' || ref.from == null) ref._from = cursor[ref.clip] || 0; else ref._from = ref.from;
+      cursor[ref.clip] = ref._from + dur * (ref.speed || 1);
+    }
+    for (const e of s.sfx || []) cues.push({ sfx: e.type, at: t + e.at, vol: e.vol });
+    segs.push({ ...s, t0: t, dur }); t += dur;
+  }
+  return { segs, cues, total: t };
+}
+
+async function drawClipLayer(g, L, tl, rect) {
+  const { img, meta } = await clipFrame(L.clip, L._from + tl * (L.speed || 1));
+  const [x, y, w, h] = rect || L.rect || [0, 0, W, H];
+  g.save(); if (L.alpha != null) g.globalAlpha = L.alpha;
+  cover(g, img, x, y, w, h, L.fx ?? 0.5, L.fy ?? 0.5); g.restore();
+  if (L.label) pill(g, L.label, x + 30, y + 30, L.labelColor || (L.label.startsWith('BEFORE') ? C.red : C.green));
+  return meta;
+}
+
+async function run(id, opts = {}) {
+  const st = window.STATUS = { id, frame: 0, of: 0, done: false };
+  SRC = await get('/src/exhibit.js', 'text');
+  const E = (0, eval)(await get(`/videos/${id}/edl.js`, 'text'));
+  if (!E.lines) E.lines = await get(`/videos/${id}/script.json`);
+  const vo = E.lines.length ? await get(`/videos/${id}/vo.json`) : { lines: [] };
+  const TL = timeline(E, vo);
+  for (const s of TL.segs) for (const L of s.layers || []) {
+    for (const k of ['clip', 'a', 'b']) { const r = k === 'clip' ? L : L[k]; if (r && r.clip) await loadClip(r.clip); }
+    if (L.series) for (const s2 of L.series) if (s2.clip) await loadClip(s2.clip);
+    if (L.modeClip) await loadClip(L.modeClip);
+  }
+  const n = Math.round(TL.total * FPS); st.of = n;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
+  const only = opts.only;   // [from, to] seconds, for previews
+  let batch = [], prevMode = null, lastMode = null;
+  for (let f = 0; f < n; f++) {
+    const t = f / FPS;
+    if (only && (t < only[0] || t >= only[1] || (f % (opts.every || 1)))) continue;
+    const s = TL.segs.find(s => t >= s.t0 && t < s.t0 + s.dur) || TL.segs[TL.segs.length - 1], tl = t - s.t0;
+    g.fillStyle = s.bg || C.bg; g.fillRect(0, 0, W, H);
+    for (const L of s.layers || []) {
+      if (L.type === 'clip') await drawClipLayer(g, L, tl);
+      else if (L.type === 'split') { await drawClipLayer(g, L.a, tl, [0, L.top ?? 0, W, (L.h ?? 960)]); await drawClipLayer(g, L.b, tl, [0, (L.top ?? 0) + (L.h ?? 960), W, (L.h ?? 960)]); g.fillStyle = '#0b0c0f'; g.fillRect(0, (L.top ?? 0) + (L.h ?? 960) - 3, W, 6); }
+      else if (L.type === 'code') code(g, L, tl);
+      else if (L.type === 'graph') graph(g, L, tl);
+      else if (L.type === 'text') textLayer(g, L, tl);
+      else if (L.type === 'stat') bigStat(g, L, tl);
+      else if (L.type === 'end') endCard(g, L, tl);
+      else if (L.type === 'dim') { g.fillStyle = `rgba(0,0,0,${L.a ?? 0.5})`; g.fillRect(...(L.rect || [0, 0, W, H])); }
+      else if (L.type === 'diagram') {
+        const { meta } = await clipFrame(L.modeClip, (L.modeFrom ?? 0) + tl * (L.speed || 1));
+        if (meta.mode !== lastMode) { prevMode = lastMode; lastMode = meta.mode; }
+        L._prev = prevMode; diagram(g, L, tl, meta.mode);
+      }
+      else if (L.type === 'draw') L.fn(g, tl, { W, H, C, SANS, MONO, SERIF, ease, clips });
+    }
+    header(g, E);
+    for (const c of TL.cues) if (c.text) { const b = c.at + (c.b - c.a) + 0.3; if (t >= c.at - 0.1 && t <= b + 0.15) subtitle(g, c.text, Math.min(1, (t - (c.at - 0.1)) / 0.15, (b + 0.15 - t) / 0.15)); }
+    if (t < 0.5) { g.fillStyle = `rgba(0,0,0,${1 - ease(t / 0.5)})`; g.fillRect(0, 0, W, H); }
+    if (t > TL.total - 0.8) { g.fillStyle = `rgba(0,0,0,${ease((t - (TL.total - 0.8)) / 0.8)})`; g.fillRect(0, 0, W, H); }
+    if (opts.preview) { (st.preview ||= []).push(cv.toDataURL('image/jpeg', 0.6)); }
+    else {
+      batch.push(`videos/${id}/frames/f${String(f).padStart(5, '0')}.jpg ${cv.toDataURL('image/jpeg', 0.9).split(',')[1]}`);
+      if (batch.length >= 24) { await fetch('/batch', { method: 'POST', body: batch.join('\n') }); batch = []; }
+    }
+    st.frame++;
+  }
+  if (batch.length) await fetch('/batch', { method: 'POST', body: batch.join('\n') });
+  if (!opts.preview) await fetch(`/videos/${id}/timeline.json`, { method: 'POST', body: JSON.stringify({ total: TL.total, cues: TL.cues, music: E.music || null }) });
+  st.done = true;
+}
+window.COMPOSE = { run, snippet, timeline };

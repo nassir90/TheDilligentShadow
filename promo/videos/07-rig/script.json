@@ -1,0 +1,20 @@
+[
+ {
+  "say": "How it works: rigging her."
+ },
+ {
+  "say": "She's the Animated Woman by Quaternius. But none of the model's own animations are used."
+ },
+ {
+  "say": "Every frame, her pose is a handful of numbers. Hip height, thighs, knees, lean, nod, and arms."
+ },
+ {
+  "say": "Those become bone rotations. The legs are solved in 3D, from her real hip joints, to exactly where the feet belong."
+ },
+ {
+  "say": "Her hands came rigged, but frozen. Now each finger curls about an axis found from the rest pose."
+ },
+ {
+  "say": "One grip value takes her from an open hand, to a fist."
+ }
+]

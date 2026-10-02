@@ -6,7 +6,8 @@ KEY = open(sys.argv[1]).read().strip()
 OUT = sys.argv[2]
 BASE = f"https://aiplatform.googleapis.com/v1/projects/{os.environ['GCP_PROJECT']}/locations/global/publishers/google/models/"
 VOICE, STYLE = "Laomedeia", "soft, gentle storyteller, unhurried"
-LINES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "script.json")))
+LINES = json.load(open(sys.argv[3] if len(sys.argv) > 3 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "script.json")))
+VOICE, STYLE = os.environ.get("VOICE", VOICE), os.environ.get("STYLE", STYLE)
 
 def post(model, body):
     req = urllib.request.Request(BASE + model + ":generateContent", json.dumps(body).encode(),
@@ -54,6 +55,12 @@ for a, b in zip(cuts, cuts[1:]):
     if sum(w in lw[best] for w in tw) == 0: continue
     cur = best; starts.setdefault(best, next((g1 for g0, g1 in gaps if abs((g0 + g1) / 2 - a) < 1e-3), a))
 timing = [{"line": l["say"], "start": round(starts[i], 3) if i in starts else None} for i, l in enumerate(LINES)]
+for i, tm in enumerate(timing):   # a line ends where the silence before the next one begins
+    nxt = timing[i + 1]["start"] if i + 1 < len(timing) and timing[i + 1]["start"] is not None else dur
+    if i + 1 < len(timing): tm["end"] = round(max([a for a, b in gaps if tm["start"] is not None and tm["start"] < a < nxt] or [nxt]), 3)
+    else:   # the last line ends where the closing silence starts
+        tail = [a for a, b in zip(s0, s1 + [dur] * (len(s0) - len(s1))) if b >= dur - 0.05 and a > (tm["start"] or 0)]
+        tm["end"] = round(tail[0] if tail else dur, 3)
 json.dump({"duration": round(dur, 3), "lines": timing, "heard": heard}, open(OUT.replace(".wav", ".json"), "w"), indent=1)
 print(json.dumps(timing, indent=1)); print("duration", round(dur, 2)); print("heard:", " | ".join(heard))
 print("missing lines:", [i + 1 for i, t in enumerate(timing) if t["start"] is None])

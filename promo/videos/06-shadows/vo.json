@@ -1,0 +1,52 @@
+{
+ "duration": 35.92,
+ "lines": [
+  {
+   "line": "How it works: the invisible cast.",
+   "start": 0.0,
+   "end": 3.316
+  },
+  {
+   "line": "Everything on the wall is a real shadow, cast by one lamp.",
+   "start": 4.114,
+   "end": 8.156
+  },
+  {
+   "line": "Her body, her hair, her cloak, and the chair, are all real 3D objects.",
+   "start": 8.859,
+   "end": 14.726
+  },
+  {
+   "line": "But they write no colour and no depth. You never see them. They only cast shadows.",
+   "start": 15.458,
+   "end": 21.473
+  },
+  {
+   "line": "They stand between the lamp and the wall, scaled toward the light, so the shadows land at just the right size.",
+   "start": 22.289,
+   "end": 29.078
+  },
+  {
+   "line": "Even the credit line is a shader. Each letter is inked black or white, by whatever is behind it.",
+   "start": 29.866,
+   "end": 35.582
+  }
+ ],
+ "heard": [
+  "How it works.",
+  "The Invisible Cast",
+  "Everything on the wall is a real shadow.",
+  "cast by one lamp.",
+  "Her body, her hair, her cloak,",
+  "And the chair.",
+  "Are all real 3D objects?",
+  "But they write no color and no depth.",
+  "You never see them.",
+  "They only cast shadows.",
+  "They stand between the lamp and the wall.",
+  "scaled toward the light.",
+  "So the shadows land at just the right size.",
+  "Even the credit line is a shader.",
+  "Each letter is inked black or white by whatever is behind it."
+ ]
+}

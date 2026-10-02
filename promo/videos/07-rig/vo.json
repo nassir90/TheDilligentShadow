@@ -1,0 +1,55 @@
+{
+ "duration": 40.24,
+ "lines": [
+  {
+   "line": "How it works: rigging her.",
+   "start": 0.0,
+   "end": 2.264
+  },
+  {
+   "line": "She's the Animated Woman by Quaternius. But none of the model's own animations are used.",
+   "start": 2.958,
+   "end": 9.417
+  },
+  {
+   "line": "Every frame, her pose is a handful of numbers. Hip height, thighs, knees, lean, nod, and arms.",
+   "start": 10.219,
+   "end": 18.483
+  },
+  {
+   "line": "Those become bone rotations. The legs are solved in 3D, from her real hip joints, to exactly where the feet belong.",
+   "start": 19.416,
+   "end": 27.45
+  },
+  {
+   "line": "Her hands came rigged, but frozen. Now each finger curls about an axis found from the rest pose.",
+   "start": 28.339,
+   "end": 35.784
+  },
+  {
+   "line": "One grip value takes her from an open hand, to a fist.",
+   "start": 36.323,
+   "end": 39.897
+  }
+ ],
+ "heard": [
+  "How it works.",
+  "Ringing her.",
+  "She's the animated woman by Quaternious.",
+  "But none of the models' own animations are used.",
+  "Every frame, her pose is a handful of numbers.",
+  "Hip, hip",
+  "Eyes.",
+  "knees",
+  "Clean",
+  "nod",
+  "and arms.",
+  "Those become bone rotations.",
+  "The legs are solved in 3D.",
+  "from her real hip joints to exactly where the feet belong.",
+  "Her hands came rigged, but frozen.",
+  "Now, each finger curls about an axis found from the rest pose.",
+  "One grip value takes her from an open hand.",
+  "To a forest."
+ ]
+}
