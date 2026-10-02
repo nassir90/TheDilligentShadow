@@ -375,6 +375,7 @@ function setupFigure(gltf) {
   initFigureConstants();
   rig.yaw = Math.PI / 2; S.mode = 'rest'; S.t = 0; S.minSit = 1.5;   // she starts seated on her chair
   // put the seat exactly under her: pose her seated, find where her hips and thighs actually bottom out
+  buildPonytail(meshes, toRoot);
   hair.init(); cloak.init();       // cloth anchors are measured on the rest pose, so set up before posing her
   if (chair) { applyFigure(0); fitChairSeat(seatContact() - 0.0005); rig.upper = null; }
   settleCloth();
@@ -392,6 +393,38 @@ function settleCloth() {
   for (let i = 0; i <= 60; i++) { pose(i / 60); step(); }           // sit down
   for (let i = 0; i < 40; i++) { pose(1); step(); }                 // and settle
   fig.x = SIT_X; fig.pose = { ...end };
+}
+
+// The model's hair is one rigid mesh made of separate pieces (cap, fringe, side locks, ponytail). The ponytail is the
+// pieces lying wholly behind her head. Its triangles are removed from the rigid mesh, and its shape is traced into rings
+// (horizontal slices, each an ellipse fitted to the slice) that become the cloth tube's starting shape.
+function buildPonytail(meshes, toRoot) {
+  const hm = meshes.find(m => m.name === 'Formad_Head_2'); if (!hm) return;
+  const geo = hm.geometry, idx = geo.index.array, pos = geo.attributes.position, n = pos.count;
+  const key = i => [pos.getX(i), pos.getY(i), pos.getZ(i)].map(v => Math.round(v * 1e5)).join(',');
+  const weld = new Map(), rep = new Int32Array(n), par = Int32Array.from({ length: n }, (_, i) => i);
+  for (let i = 0; i < n; i++) { const k = key(i); if (!weld.has(k)) weld.set(k, i); rep[i] = weld.get(k); }
+  const find = a => { while (par[a] !== a) a = par[a] = par[par[a]]; return a; };
+  for (let t = 0; t < idx.length; t += 3) { const a = find(rep[idx[t]]); par[find(rep[idx[t + 1]])] = a; par[find(rep[idx[t + 2]])] = a; }
+  const head = toRoot(bn('Head').getWorldPosition(new THREE.Vector3())), v = new THREE.Vector3(), P = [], front = new Map();
+  for (let i = 0; i < n; i++) { hm.boneTransform(i, v); hm.localToWorld(v); P[i] = toRoot(v); const c = find(rep[i]); front.set(c, Math.max(front.get(c) ?? -1, P[i].z - head.z)); }
+  const pony = new Set([...front].filter(([, z]) => z < -0.01).map(([c]) => c)), inPony = i => pony.has(find(rep[i]));
+  const pts = []; for (let i = 0; i < n; i++) if (inPony(i)) pts.push(P[i]);
+  if (pts.length < 50) return;
+  geo.setIndex(Array.from(idx).filter((_, t, a) => { const b = t - t % 3; return !(inPony(a[b]) || inPony(a[b + 1]) || inPony(a[b + 2])); }));
+  // rings: M horizontal slices from just below the top of the ponytail to its tip, each an ellipse (lateral x, depth z)
+  const N = hair.N, M = hair.M, ys = pts.map(p => p.y).sort((a, b) => a - b), top = ys[Math.floor(ys.length * 0.97)], tip = ys[0];
+  const rings = [];
+  for (let l = 0; l < M; l++) {
+    const y = lerp(top, tip, l / (M - 1)), half = (top - tip) / (M - 1) * 0.75;
+    let sl = pts.filter(p => Math.abs(p.y - y) < half); if (sl.length < 6) sl = [...pts].sort((a, b) => Math.abs(a.y - y) - Math.abs(b.y - y)).slice(0, 12);
+    const q = (arr, f) => { const s = arr.slice().sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(s.length * f))]; };
+    const xs = sl.map(p => p.x), zs = sl.map(p => p.z), cx = (q(xs, 0.05) + q(xs, 0.95)) / 2, cz = (q(zs, 0.05) + q(zs, 0.95)) / 2;
+    const ax = Math.max(0.002, (q(xs, 0.95) - q(xs, 0.05)) / 2), az = Math.max(0.002, (q(zs, 0.95) - q(zs, 0.05)) / 2);
+    for (let i = 0; i < N; i++) { const t = i / N * Math.PI * 2; rings.push(new THREE.Vector3(cx + Math.cos(t) * ax, y, cz + Math.sin(t) * az)); }
+  }
+  hair.shapeRoot = rings;
+  rig.ponytail = { verts: pts.length, pieces: pony.size, top: top - head.y, tip: tip - head.y };
 }
 
 // pose → bones. Leg A/arm A is the figure's right side: the side toward the lamp when it walks toward the switch.
@@ -686,6 +719,20 @@ class Cloth {
     const v = new THREE.Vector3(), w = new THREE.Vector3();
     this.anchorStage(0, v); this.anchorStage(1, w);
     this.across = v.distanceTo(w);
+    if (this.shapeRoot) {
+      // a starting shape (figure-local, rest pose): kept in the bone's frame, and every link's rest length is
+      // measured from it, so the cloth starts exactly in that shape and from then on behaves as fabric
+      this.shape = this.shapeRoot.map(p => bone.worldToLocal(L(p.x, p.y, p.z)));
+      const d = (a, b) => this.shapeRoot[a].distanceTo(this.shapeRoot[b]);
+      this.rv = new Float32Array(N * M); this.rb = new Float32Array(N * M); this.ra = new Float32Array(N * M); this.ro = new Float32Array(N * M);
+      for (let l = 1; l < M; l++) for (let i = 0; i < N; i++) {
+        const k = l * N + i;
+        this.rv[k] = d(k - N, k);
+        if (l >= 2) this.rb[k] = d(k - 2 * N, k);
+        this.ra[k] = d(k, l * N + (i + 1) % N);
+        this.ro[k] = d(k, l * N + (i + (N >> 1)) % N);   // straight across the ring
+      }
+    }
     if (this.setupHold) this.setupHold();
     this.reset();
   }
@@ -693,7 +740,10 @@ class Cloth {
   reset() {
     rig.root.updateMatrixWorld(true);
     const v = new THREE.Vector3(), seg = this.len / (this.M - 1);
-    for (let i = 0; i < this.N; i++) {
+    if (this.shape) {   // start in the given shape, carried by the bone
+      const bone = bn(this.bone);
+      this.shape.forEach((p, k) => { stageG.worldToLocal(bone.localToWorld(v.copy(p))); this.pts.set([v.x, v.y, v.z], k * 3); });
+    } else for (let i = 0; i < this.N; i++) {
       this.anchorStage(i, v);
       for (let l = 0; l < this.M; l++) { const k = (l * this.N + i) * 3; this.pts[k] = v.x; this.pts[k + 1] = v.y - l * seg; this.pts[k + 2] = v.z; }
     }
@@ -735,9 +785,13 @@ class Cloth {
       for (let pass = 0; pass < this.passes; pass++) {
         for (let l = 1; l < M; l++) for (let i = 0; i < N; i++) {
           const a = (l * N + i) * 3, up = ((l - 1) * N + i) * 3;
-          this.link(up, a, seg, l === 1 ? 0 : 0.5, 1, 'both');
-          if (l >= 2) this.link(((l - 2) * N + i) * 3, a, seg * 2, l === 2 ? 0 : 0.5, this.bend, 'min');
-          if (this.closed || i < N - 1) this.link(a, (l * N + (i + 1) % N) * 3, this.across * Math.max(0.2, 1 + l * this.spread), 0.5, 1, 'max');
+          const k = l * N + i, rv = this.rv;
+          this.link(up, a, rv ? rv[k] : seg, l === 1 ? 0 : 0.5, 1, 'both');
+          // a shaped cloth (the ponytail) also keeps its curve (bending links both ways) and its cross-section (rings
+          // held at their own size, and across), so it swings as a lock instead of collapsing into a limp cord
+          if (l >= 2) this.link(((l - 2) * N + i) * 3, a, rv ? this.rb[k] : seg * 2, l === 2 ? 0 : 0.5, this.bend, rv ? 'both' : 'min');
+          if (this.closed || i < N - 1) this.link(a, (l * N + (i + 1) % N) * 3, rv ? this.ra[k] : this.across * Math.max(0.2, 1 + l * this.spread), 0.5, 1, rv ? 'both' : 'max');
+          if (rv && i < (N >> 1)) this.link(a, (l * N + (i + (N >> 1)) % N) * 3, this.ro[k], 0.5, 0.6, 'both');
         }
         for (let q = N * 6; q < P.length; q += 3) {   // rows next to the pins never collide: the pins sit just outside the body
           for (const [A, B, r] of caps) this.pushCapsule(q, A, B, r);
@@ -843,31 +897,13 @@ function skinPoint(vert, dx, dz, gap, out) {
 const legCaps = (sp, r1, r2) => ['L', 'R'].flatMap(s => [[sp('UpperLeg.' + s), sp('LowerLeg.' + s), r1], [sp('LowerLeg.' + s), sp('LowerLeg.' + s + '_end'), r2]]);
 const CLOAK_GAP = 0.003;   // cloth thickness off the skin
 // long hair: a sheet from ear to ear round the back of the head, falling to the middle of her back
+// Her ponytail: the model's own ponytail mesh is rigid (all of it on the Head bone), so it is hidden and replaced by a
+// fabric tube built in its exact shape (rings traced round its cross-section, top to tip; see buildPonytail), pinned
+// at the scalp. From its first frame it is ordinary cloth: links keep the ponytail's own lengths, gravity, drag and the
+// head, neck and back push it about.
 const hair = new Cloth({
-  bone: 'Head', N: 9, M: 9, len: 0.12, closed: false, spread: -0.07, drag: 2.2, bend: 0.35,
-  anchorsLocal() {
-    const h = rig.head;
-    return Array.from({ length: this.N }, (_, i) => {
-      const t = lerp(-1.35, 1.35, i / (this.N - 1));
-      return new THREE.Vector3(Math.sin(t) * h.r * 1.1, h.y + h.r * 0.45, -Math.cos(t) * h.r * 1.1 + h.z);
-    });
-  },
-  // below the nape the hair lies lightly on her back (and on the cloak there): a soft pull, so it still swings
-  setupHold() {
-    const seg = this.len / (this.M - 1), h = rig.head, y0 = h.y + h.r * 0.45, neckY = rig.shoulderY + 0.02;
-    this.hold = [];
-    for (let i = 0; i < this.N; i++) {
-      const t = lerp(-1.35, 1.35, i / (this.N - 1)), dx = Math.sin(t) * 0.6, dz = -Math.cos(t);
-      const n = Math.hypot(dx, dz);
-      for (let l = 1; l < this.M; l++) {
-        const y = y0 - l * seg;
-        if (y > neckY) continue;
-        const { vert } = surfaceAt(y, dx / n, dz / n, Math.abs(rig.lat.L.sh) * 0.9);
-        if (vert) this.hold.push({ q: (l * this.N + i) * 3, dx: dx / n, dz: dz / n, vert, w: 0.25 });
-      }
-    }
-  },
-  holdPoint(h, out) { return skinPoint(h.vert, h.dx, h.dz, CLOAK_GAP + 0.004, out); },
+  bone: 'Head', N: 8, M: 12, len: 0.08, closed: true, drag: 2.2, bend: 0.45,
+  anchorsLocal() { return this.shapeRoot.slice(0, this.N); },
   colliders(sp) {
     const head = sp('Head'), top = sp('Head_end'), neck = sp('Neck'), chest = sp(bn('Chest') ? 'Chest' : 'Torso'), hips = sp('Hips');
     const hc = head.clone().lerp(top, 0.45);
