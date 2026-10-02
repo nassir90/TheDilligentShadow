@@ -1797,6 +1797,25 @@ function toggleView() {
 }
 addEventListener('keydown', e => { if (e.key === 'Enter' && !(e.target instanceof HTMLAnchorElement) && scrollY < 1) toggleView(); });
 
+// Touch screens: OrbitControls cancels every touch on the canvas, so the page could never scroll from it. In the
+// close-up a touch that starts on the plinth (not the switch) is kept from the controls, and the browser scrolls the
+// page itself (the canvas allows vertical panning there), momentum and all.
+let plinthSwipe = false;
+stage.addEventListener('touchstart', e => {
+  plinthSwipe = false;
+  if (view !== 'close' || flyTo || e.touches.length !== 1) return;
+  setPtr(e.touches[0]);
+  if (hitsSwitch() || !hitsPlinth()) return;
+  plinthSwipe = true;
+  e.stopPropagation();
+}, { capture: true, passive: true });
+for (const type of ['touchmove', 'touchend', 'touchcancel'])
+  stage.addEventListener(type, e => {
+    if (!plinthSwipe) return;
+    e.stopPropagation();
+    if (type !== 'touchmove' && !e.touches.length) plinthSwipe = false;
+  }, { capture: true, passive: true });
+
 // ---------- the page under the plinth ----------
 // In the close-up, scrolling down lifts the plinth and a page about the piece written on its front face, with the
 // credit line as its header. Only the close-up scrolls: there the wheel scrolls instead of zooming, and on touch
@@ -1813,6 +1832,7 @@ function setScrollable() {
 // (the face then fills the screen, or its upper part on tall screens); then the camera stays and the text carries
 // on over the face.
 const faceEdge = new THREE.Vector3();
+let camDrop = 0;   // how far the camera is dropped right now
 function pageDrop() {
   if (view !== 'close' || !scrollY) return 0;
   const H = renderer.domElement.clientHeight, d = camera.position.distanceTo(faceEdge.set(PLINTH.x, PLINTH.h, FRONT_Z));
@@ -1971,6 +1991,9 @@ function frame(dt, t) {
   aimHand();
   updateHand(dt, t);
 
+  // the page's camera drop is a pure translation: off before the fly and the controls' update (they'd read it as a
+  // turn), back on until the next frame so pointer hits match what's on screen
+  camera.position.y += camDrop; camDrop = 0;
   if (flyTo) {
     flyTo.t = Math.min(1, flyTo.t + dt / 1.1);
     const e = flyTo.t < .5 ? 2 * flyTo.t * flyTo.t : 1 - Math.pow(-2 * flyTo.t + 2, 2) / 2;
@@ -1979,11 +2002,10 @@ function frame(dt, t) {
     if (flyTo.t === 1) flyTo = null;
   }
   controls.update();
-  const drop = pageDrop();   // a pure translation, applied for this render only, so the controls never see it
-  if (drop) { camera.position.y -= drop; camera.updateMatrixWorld(); }
+  camDrop = pageDrop();
+  camera.position.y -= camDrop; camera.updateMatrixWorld();
   renderer.render(scene, camera);
   creditFX.draw();
-  if (drop) { camera.position.y += drop; camera.updateMatrixWorld(); }
 }
 function tick() {
   const dt = Math.min(clock.getDelta(), 0.05);
