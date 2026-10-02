@@ -30,7 +30,7 @@
   // full height: a level camera on her shins, so her legs fill the top half and the ledge below takes the code
 const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.035); return { pos: V(at.x, at.y, at.z + d), at, fov }; };
 
-  const walk = (name, h, mods) => { const f = feet(); return { name, w: 1080, h, dur: 5, mods,
+  const walk = (name, h, mods) => { const f = feet(); return { name, w: 1080, h, dur: 7.5, mods,
     setup: H => { H.lights(true); H.hold(true); H.stand(STRIKE.x, -1); S.mode = 'home'; S.t = 0; },
     cam: h > 1000 ? lowCam(-0.43, 1.05) : (t, H) => H.wallCam(-0.43, 0.12, 0.66, 36),
     overlay(g, t, P, H, m) {
@@ -39,9 +39,10 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
         ann.push({ k: 'call', x: s.x, y: s.y, r: 30, dx: side === 'R' ? 150 : -150, dy: side === 'R' ? -170 : -260, text: s.state === 'sliding' ? `sliding ${mm(s.slip)} mm` : `planted ${mm(s.slip)} mm` }); }
       m.ann = ann; m.slip = f.st.maxSlip;
     } }; };
-  const turnClip = (name, h, mods) => { const f = feet(); return { name, w: 1080, h, dur: 3.2, mods,
+  const turnClip = (name, h, mods) => { const f = feet(); return { name, w: 1080, h, dur: 6.5, mods,
     setup: H => { H.lights(true); H.hold(true); H.stand(STRIKE.x - 0.1, 1); S.mode = 'home'; S.t = 0; },
-    cam: h > 1000 ? lowCam(STRIKE.x - 0.1, 0.9) : (t, H) => H.wallCam(STRIKE.x - 0.1, 0.12, 0.45, 36),
+    // follows her once she has turned and walks off, so the shot never empties
+    cam: (() => { let cx = null; return (t, H) => { cx = cx == null ? STRIKE.x - 0.1 : cx + (clamp(fig.x, -0.62, STRIKE.x - 0.1) - cx) * 0.08; return h > 1000 ? lowCam(cx, 0.9)(t, H) : H.wallCam(cx, 0.12, 0.45, 36); }; })(),
     overlay(g, t, P, H, m) {
       const ft = f.step(t, H, P), ann = f.prints(t, P);
       ann.push({ k: 'call', x: ft.R.x, y: ft.R.y, r: 30, dx: 160, dy: -200, text: ft.R.state });
@@ -76,9 +77,9 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
           ann.push({ k: 'call', x: ax, y: ay, r: 30, dx: 170, dy: -130, text: 'planted ankle' });
           m.ann = ann;
         } },
-      (() => { const f = feet(); return { name: 'ik_montage', w: 1080, h: 1920, dur: 13,
+      (() => { const f = feet(); return { name: 'ik_montage', w: 1080, h: 1920, dur: 20,
         setup: H => { H.lights(true); H.hold(true); H.stand(FRONT_X, 1); S.mode = 'approach'; S.t = 0; S.patience = 2; },
-        cam: (t, H) => { const at = H.wallPt(-0.45, 0.12), c = H.wallPt(-0.45, 0.2); return { pos: V(c.x, c.y + 0.03, c.z + 1.05), at, fov: 36 }; },
+        cam: (() => { let cx = null; return (t, H) => { const want = clamp(fig.x, -0.6, -0.27); cx = cx == null ? want : cx + (want - cx) * 0.06; const at = H.wallPt(cx, 0.12), c = H.wallPt(cx, 0.2); return { pos: V(c.x, c.y + 0.03, c.z + 1.05), at, fov: 36 }; }; })(),
         overlay(g, t, P, H, m) {
           const ft = f.step(t, H, P), ann = f.prints(t, P), [hx, hy] = P(H.bonePos('Hips'));
           ann.push({ k: 'call', x: hx, y: hy, r: 40, dx: 200, dy: -330, text: S.mode });

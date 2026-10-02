@@ -48,68 +48,103 @@ function applyInk(g) {
   }
   g.putImageData(fr, 0, 0);
 }
-// a square block with the word cut out of it: the whole block is black or white, by the average behind it
-function cutLabel(g, text, x, y, size = 30) {
-  g.save(); g.font = `700 ${size}px ${SERIF}`; const w = Math.ceil(g.measureText(text).width + size * 0.9), h = Math.ceil(size * 1.45);
+// ---- crowding check: every piece of text records its glyph box; boxes of different elements must not overlap or
+// sit closer than a fraction of the smaller font's height ----
+const BOXES = [];
+function tbox(group, ctx, text, x, y, size) {   // box of text drawn at (x, y) with ctx's current font and alignment
+  const m = ctx.measureText(text), l = x - m.actualBoundingBoxLeft, r = x + m.actualBoundingBoxRight;
+  BOXES.push({ group, x0: l, x1: r, y0: y - m.actualBoundingBoxAscent, y1: y + m.actualBoundingBoxDescent, size, text });
+}
+function crowding(t) {
+  const st = STATUS.crowd ||= { frames: 0, overlaps: {}, tight: {}, worstGap: Infinity, worstPair: '' };
+  let bad = false;
+  for (let i = 0; i < BOXES.length; i++) for (let j = i + 1; j < BOXES.length; j++) {
+    const a = BOXES[i], b = BOXES[j]; if (a.group === b.group) continue;
+    const hx = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0); if (hx <= 0) continue;   // not stacked
+    const gap = Math.max(a.y0, b.y0) - Math.min(a.y1, b.y1), key = `${a.group} × ${b.group}`;
+    const need = 0.25 * Math.min(a.size, b.size);
+    if (gap < 0) { st.overlaps[key] = (st.overlaps[key] || 0) + 1; bad = true; }
+    else if (gap < need) { st.tight[key] = (st.tight[key] || 0) + 1; bad = true; }
+    if (gap < st.worstGap) { st.worstGap = Math.round(gap); st.worstPair = `${key} at ${t.toFixed(2)}s`; }
+  }
+  if (bad) st.frames++;
+  BOXES.length = 0;
+}
+// a square block with the word cut out of it (lowercase, regular weight): the whole block is black or white, by the
+// average brightness behind it
+function cutLabel(g, text, x, y, size = 34) {
+  text = text.toLowerCase();
+  g.save(); g.font = `400 ${size}px ${SERIF}`; const w = Math.ceil(g.measureText(text).width + size * 0.8), h = Math.ceil(size * 1.4);
   const px = g.getImageData(x, y, w, h).data; let lum = 0; for (let i = 0; i < px.length; i += 4) lum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
   lum /= px.length / 4;
   const c = document.createElement('canvas'); c.width = w; c.height = h; const cg = c.getContext('2d');
   cg.fillStyle = lum > 128 ? '#000' : '#fff'; cg.fillRect(0, 0, w, h);
-  cg.globalCompositeOperation = 'destination-out'; cg.font = g.font; cg.textBaseline = 'middle'; cg.fillText(text, size * 0.45, h / 2 + 1);
+  cg.globalCompositeOperation = 'destination-out'; cg.font = g.font; cg.textBaseline = 'alphabetic'; cg.fillText(text, size * 0.4, h * 0.7);
   g.drawImage(c, x, y); g.restore();
+  BOXES.push({ group: 'label:' + text, x0: x, x1: x + w, y0: y, y1: y + h, size, text });
 }
 // annotations recorded with a clip (in clip pixels), drawn into the ink mask at output scale
 function drawAnn(list, map) {
   ig.save(); ig.strokeStyle = '#fff'; ig.fillStyle = '#fff'; ig.lineWidth = 3; ig.lineCap = 'round'; ig.lineJoin = 'round';
   for (const a of list || []) {
     ig.globalAlpha = a.o ?? 1;
-    if (a.k === 'dot') { const [x, y] = map(a.x, a.y); ig.beginPath(); ig.arc(x, y, a.r || 7, 0, 7); a.fill === false ? ig.stroke() : ig.fill(); }
+    if (a.k === 'dot') { const [x, y] = map(a.x, a.y); ig.beginPath(); ig.arc(x, y, (a.r || 7) * 0.8, 0, 7); a.fill === false ? ig.stroke() : ig.fill(); }
     else if (a.k === 'line') { ig.lineWidth = a.w || 3; ig.beginPath(); a.pts.forEach((p, i) => { const [x, y] = map(...p); i ? ig.lineTo(x, y) : ig.moveTo(x, y); }); ig.stroke(); ig.lineWidth = 3; }
     else if (a.k === 'call') {
-      // circle on the feature, a leader to the label, and the leader runs on to underline it
-      const [cx, cy] = map(a.x, a.y), r = a.r || 34;
-      ig.font = `400 ${a.size || 32}px ${COUR}`; const tw = ig.measureText(a.text).width;
-      // keep the label on screen: flip it to the other side if it would run off an edge
-      let dx = a.dx; if (cx + dx - tw < 24 && dx < 0) dx = -dx; else if (cx + dx + tw > W - 24 && dx > 0) dx = -dx;
-      const lx = cx + dx, ly = cy + a.dy, left = dx < 0;
-      const ux0 = lx, ux1 = left ? lx - tw : lx + tw, uy = ly + 9;
-      const ang = Math.atan2(uy - cy, ux0 - cx), ex = cx + Math.cos(ang) * r, ey = cy + Math.sin(ang) * r;
+      // a small circle on the feature, a leader to the label, and the leader runs on to underline it
+      const [cx, cy] = map(a.x, a.y), r = (a.r || 34) * 0.55, size = a.size || 36;
+      ig.font = `400 ${size}px ${SERIF}`; const tw = ig.measureText(a.text).width;
+      let dx = a.dx; if (cx + dx - tw < 24 && dx < 0) dx = -dx; else if (cx + dx + tw > W - 24 && dx > 0) dx = -dx;   // keep it on screen
+      const lx = cx + dx, ly = cy + a.dy, left = dx < 0, ux1 = left ? lx - tw - 6 : lx + tw + 6, uy = ly + 10;
+      const ang = Math.atan2(uy - cy, lx - cx), ex = cx + Math.cos(ang) * r, ey = cy + Math.sin(ang) * r;
       ig.beginPath(); ig.arc(cx, cy, r, 0, 7); ig.stroke();
-      ig.beginPath(); ig.moveTo(ex, ey); ig.lineTo(ux0, uy); ig.lineTo(ux1, uy); ig.stroke();
-      const dir = left ? Math.PI : 0; ig.beginPath(); ig.moveTo(ux0, uy); ig.lineTo(ux0 - Math.cos(dir - 0.5) * 14, uy - Math.sin(dir - 0.5) * 14); ig.moveTo(ux0, uy); ig.lineTo(ux0 - Math.cos(dir + 0.5) * 14, uy - Math.sin(dir + 0.5) * 14); ig.stroke();
-      ig.textAlign = left ? 'right' : 'left'; ig.fillText(a.text, ux0 + (left ? -4 : 4), ly);
-      ig.textAlign = 'left';
+      ig.beginPath(); ig.moveTo(ex, ey); ig.lineTo(lx, uy); ig.lineTo(ux1, uy); ig.stroke();
+      ig.textAlign = left ? 'right' : 'left'; const tx = lx + (left ? -3 : 3); ig.fillText(a.text, tx, ly);
+      tbox('call#' + (drawAnn.n = (drawAnn.n || 0) + 1), ig, a.text, tx, ly, size); ig.textAlign = 'left';   // each callout is its own element
     }
   }
   ig.restore();
 }
-function inkSubtitle(text, alpha, y = 1730) {
-  ig.save(); ig.globalAlpha = alpha; ig.font = `400 50px ${SERIF}`; ig.textAlign = 'center'; ig.fillStyle = '#fff';
-  const lines = wrap(ig, text, 940), lh = 60, y0 = y - (lines.length - 1) * lh;
-  lines.forEach((l, i) => ig.fillText(l, W / 2, y0 + i * lh)); ig.restore();
+const SUB = { size: 50, lh: 60, y: 1730, maxW: 940 };
+function subLines(text) { ig.save(); ig.font = `400 ${SUB.size}px ${SERIF}`; const l = wrap(ig, text, SUB.maxW); ig.restore(); return l; }
+function subTop(text) { return SUB.y - (subLines(text).length - 1) * SUB.lh - SUB.size * 0.72; }   // top of the subtitle's first line
+function inkSubtitle(text, alpha) {
+  ig.save(); ig.globalAlpha = alpha; ig.font = `400 ${SUB.size}px ${SERIF}`; ig.textAlign = 'center'; ig.fillStyle = '#fff';
+  const lines = subLines(text), y0 = SUB.y - (lines.length - 1) * SUB.lh;
+  lines.forEach((l, i) => { ig.fillText(l, W / 2, y0 + i * SUB.lh); tbox('subtitle', ig, l, W / 2, y0 + i * SUB.lh, SUB.size); }); ig.restore();
+}
+// a stack of centred lines laid out from their real glyph boxes: each line's top sits `gap` × its font size below
+// the line above
+function inkStack(rows, top, alpha) {
+  ig.save(); ig.globalAlpha = alpha; ig.fillStyle = '#fff'; ig.textAlign = 'center';
+  let y = top;
+  for (const r of rows) {
+    ig.font = r.font; const m = ig.measureText(r.text), base = y + m.actualBoundingBoxAscent;
+    ig.fillText(r.text, W / 2, base); tbox(r.group, ig, r.text, W / 2, base, r.size);
+    y = base + m.actualBoundingBoxDescent + (r.gap ?? 0.35) * r.size;
+  }
+  ig.restore();
 }
 function inkTitle(E, t) {
   const T = E.titleCard; if (!T) return;
   const a = ease(t / 0.6) * (1 - ease((t - (T.hold || 3.2)) / 0.9)); if (a <= 0) return;
-  ig.save(); ig.globalAlpha = a; ig.fillStyle = '#fff'; ig.textAlign = 'center';
-  ig.font = `italic 400 40px ${SERIF}`; ig.fillText(T.kicker || '', W / 2, 250);
-  ig.font = `400 112px ${SERIF}`; ig.fillText(T.title, W / 2, 370); ig.restore();
+  inkStack([{ text: T.kicker || '', font: `italic 400 40px ${SERIF}`, size: 40, group: 'title.kicker', gap: 0.5 },
+    { text: T.title, font: `400 112px ${SERIF}`, size: 112, group: 'title' }], T.top ?? 210, a);
 }
 function inkStat(L, tl) {
   const k = ease((tl - (L.delay || 0.4)) / (L.count || 1.2)), v = L.from + (L.to - L.from) * k;
-  ig.save(); ig.globalAlpha = ease(tl / 0.3); ig.fillStyle = '#fff'; ig.textAlign = 'center';
-  ig.font = `italic 400 40px ${SERIF}`; ig.fillText(L.label, W / 2, (L.y ?? 600) - 120);
-  ig.font = `400 170px ${SERIF}`; ig.fillText(v.toFixed(L.dp ?? 0) + (L.unit || ''), W / 2, L.y ?? 600);
-  if (L.note) { ig.font = `400 32px ${COUR}`; ig.fillText(L.note, W / 2, (L.y ?? 600) + 70); }
-  ig.restore();
+  const rows = [{ text: L.label, font: `italic 400 42px ${SERIF}`, size: 42, group: 'stat.label', gap: 0.55 },
+    { text: v.toFixed(L.dp ?? 0) + (L.unit || ''), font: `400 160px ${SERIF}`, size: 160, group: 'stat.value', gap: 0.3 }];
+  if (L.note) rows.push({ text: L.note, font: `400 34px ${SERIF}`, size: 34, group: 'stat.note' });
+  inkStack(rows, L.top ?? 230, ease(tl / 0.3));
 }
-// code: a plain black box, white monospace, inset so the video shows round its sides and below it
-function plainCode(g, L, tl) {
+// code: a plain black box, thin white Times New Roman, inset so the video shows round its sides and below it; it
+// sits as low as it can while keeping clear of the segment's subtitles
+function plainCode(g, L, tl, bottom) {
   const sn = L.snip ? snippet(...L.snip) : { text: L.text, line: 1 };
-  const size = L.size || 30, lh = size * 1.32, x = L.x ?? 48, w = L.w ?? (W - 96), pad = 30;
-  g.save(); g.font = `700 ${size}px ${COUR}`;
-  // long lines wrap inside the box, continuing with an extra indent
-  const rows = [];
+  const size = L.size || 34, lh = size * 1.28, x = L.x ?? 48, w = L.w ?? (W - 96), pad = 30;
+  g.save(); g.font = `400 ${size}px ${SERIF}`;
+  const rows = [];   // long lines wrap inside the box, continuing with an extra indent
   for (const ln of sn.text.split('\n')) {
     const ind = ln.match(/^ */)[0]; let rest = ln;
     while (g.measureText(rest).width > w - pad * 2) {
@@ -119,16 +154,17 @@ function plainCode(g, L, tl) {
     }
     rows.push(rest);
   }
-  const h = rows.length * lh + pad * 1.6, y = L.y ?? (H - 430 - h), a = ease(tl / 0.35);
+  const h = rows.length * lh + pad * 1.4, y = L.y ?? (bottom - h), a = ease(tl / 0.35);
   g.globalAlpha = a * 0.84; g.fillStyle = '#000'; g.fillRect(x, y, w, h); g.globalAlpha = a; g.fillStyle = '#fff';
+  BOXES.push({ group: 'code', x0: x, x1: x + w, y0: y, y1: y + h, size, text: 'code box' });
   const total = rows.join('').length, reveal = L.typing === false ? 1 : clamp((tl - 0.2) / (L.typeDur || 1.4), 0, 1);
-  let shown = Math.floor(total * reveal), cx = x + pad, cy = y + pad + size * 0.8;
+  let shown = Math.floor(total * reveal), cx = x + pad, cy = y + pad + size * 0.75;
   rows.forEach((r, i) => {
-    const yy = y + pad + size * 0.8 + i * lh, piece = r.slice(0, Math.max(0, shown)); shown -= r.length;
-    g.fillText(piece, x + pad, yy);
+    const yy = y + pad + size * 0.75 + i * lh, piece = r.slice(0, Math.max(0, shown)); shown -= r.length;
+    g.fillText(piece.replace(/^ +/, m => ' '.repeat(m.length / 2)), x + pad, yy);
     if (piece.length || i === 0) { cx = x + pad + g.measureText(piece).width; cy = yy; }
   });
-  if (reveal < 1 && Math.floor(tl * 3) % 2 === 0) g.fillRect(cx + 3, cy - size * 0.8, size * 0.55, size);
+  if (reveal < 1 && Math.floor(tl * 3) % 2 === 0) g.fillRect(cx + 3, cy - size * 0.72, 2, size * 0.9);
   g.restore();
 }
 function pill(g, text, x, y, color, size = 30) {
@@ -310,7 +346,9 @@ function timeline(E, vo) {
 
 let STYLE = 'classic';
 async function drawClipLayer(g, L, tl, rect) {
-  const { img, meta } = await clipFrame(L.clip, L._from + tl * (L.speed || 1));
+  const ct = L._from + tl * (L.speed || 1), len = clips[L.clip].meta.frames.length / clips[L.clip].meta.fps;
+  if (ct > len + 1 / 30) { const o = (STATUS.overrun ||= {}); o[L.clip] = Math.max(o[L.clip] || 0, +(ct - len).toFixed(2)); }   // the clip has run out: it would freeze
+  const { img, meta } = await clipFrame(L.clip, ct);
   const [x, y, w, h] = rect || L.rect || [0, 0, W, H];
   g.save(); if (L.alpha != null) g.globalAlpha = L.alpha;
   const map = cover(g, img, x, y, w, h, L.fx ?? 0.5, L.fy ?? 0.5); g.restore();
@@ -363,7 +401,10 @@ async function run(id, opts = {}) {
       inkTitle(E, t);
       for (const c of TL.cues) if (c.text) { const b = c.at + (c.b - c.a) + 0.3; if (t >= c.at - 0.1 && t <= b + 0.15) inkSubtitle(c.text, Math.min(1, (t - (c.at - 0.1)) / 0.15, (b + 0.15 - t) / 0.15)); }
       applyInk(g);
-      for (const L of s.layers || []) { for (const r of [L, L.a, L.b]) if (r && r._cut) { cutLabel(g, ...r._cut); r._cut = null; } if (L._code) plainCode(g, L, tl); }
+      const subs = TL.cues.filter(c => c.text && c.at < s.t0 + s.dur && c.at + (c.b - c.a) + 0.45 > s.t0);
+      const bottom = (subs.length ? Math.min(...subs.map(c => subTop(c.text))) : H - 60) - 48;   // just clear of the subtitles
+      for (const L of s.layers || []) { for (const r of [L, L.a, L.b]) if (r && r._cut) { cutLabel(g, ...r._cut); r._cut = null; } if (L._code) plainCode(g, L, tl, bottom); }
+      crowding(t);
     } else {
       header(g, E);
       for (const c of TL.cues) if (c.text) { const b = c.at + (c.b - c.a) + 0.3; if (t >= c.at - 0.1 && t <= b + 0.15) subtitle(g, c.text, Math.min(1, (t - (c.at - 0.1)) / 0.15, (b + 0.15 - t) / 0.15)); }
