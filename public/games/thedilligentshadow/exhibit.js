@@ -1793,8 +1793,35 @@ function toggleView() {
   applyLimits();
   $('credit').classList.toggle('room', view === 'room');
   renderer.domElement.style.cursor = hitsPlinth() ? (view === 'close' ? 'zoom-out' : 'zoom-in') : '';
+  setScrollable();
 }
-addEventListener('keydown', e => { if (e.key === 'Enter' && !(e.target instanceof HTMLAnchorElement)) toggleView(); });
+addEventListener('keydown', e => { if (e.key === 'Enter' && !(e.target instanceof HTMLAnchorElement) && scrollY < 1) toggleView(); });
+
+// ---------- the page under the plinth ----------
+// In the close-up, scrolling down lifts the plinth and a page about the piece written on its front face, with the
+// credit line as its header. Only the close-up scrolls: there the wheel scrolls instead of zooming, and on touch
+// screens vertical swipes scroll while sideways drags still work the switch.
+function setScrollable() {
+  const close = view === 'close';
+  document.body.classList.toggle('scrollable', close);
+  controls.enableZoom = !close;
+  renderer.domElement.style.touchAction = close ? 'pan-y' : 'none';
+  if (!close && scrollY) scrollTo(0, 0);
+}
+// The plinth is the page's background: as the page scrolls, the camera drops by the same amount at the depth of the
+// plinth's front face, so the plinth rises with the text, until the face's top edge reaches the top of the screen
+// (the face then fills the screen, or its upper part on tall screens); then the camera stays and the text carries
+// on over the face.
+const faceEdge = new THREE.Vector3();
+function pageDrop() {
+  if (view !== 'close' || !scrollY) return 0;
+  const H = renderer.domElement.clientHeight, d = camera.position.distanceTo(faceEdge.set(PLINTH.x, PLINTH.h, FRONT_Z));
+  const perPx = 2 * d * Math.tan(camera.fov * Math.PI / 360) / H;   // metres per CSS pixel at the face
+  // dropping the camera by m shows the scene as if raised by m: find the drop that puts the face's top edge at the top
+  let lo = 0, hi = 4;
+  for (let i = 0; i < 18; i++) { const m = (lo + hi) / 2; faceEdge.set(PLINTH.x, PLINTH.h + m, FRONT_Z).project(camera); faceEdge.y < 1 ? lo = m : hi = m; }
+  return Math.min(scrollY * perPx, lo);
+}
 function resize() {
   const w = stage.clientWidth, h = stage.clientHeight;
   renderer.setSize(w, h, false);
@@ -1809,6 +1836,7 @@ function resize() {
   if (view === 'close' && !flyTo && !dragging) controls.target.copy(VIEWS.close.target);
 }
 addEventListener('resize', resize); resize();
+setScrollable();
 
 // ---------- the credit line: a shader picks black or white for every pixel of it ----------
 // The HTML line stays in place (transparent) so the link works and it can be read and selected. Its glyphs are
@@ -1868,13 +1896,8 @@ const creditFX = (() => {
       mtx.fillRect(cr.left - left, cr.top - top + asc + 3, cr.width, 1);
     }
     maskTex.needsUpdate = true;
-    // quad covering the line, in clip space
-    const x0 = (left - cv.left) / cv.width * 2 - 1, x1 = (left + w - cv.left) / cv.width * 2 - 1;
-    const y0 = 1 - (top + h - cv.top) / cv.height * 2, y1 = 1 - (top - cv.top) / cv.height * 2;
-    const pos = quad.geometry.attributes.position;
-    pos.setXY(0, x0, y1); pos.setXY(1, x1, y1); pos.setXY(2, x0, y0); pos.setXY(3, x1, y0); pos.needsUpdate = true;
-    // where to copy the background from, in drawing-buffer pixels (origin bottom-left)
-    box = { x: Math.round((left - cv.left) * dpr), y: Math.round((cv.bottom - (top + h)) * dpr), W, H };
+    box = { W, H, w, h, dpr };
+    place();
     if (bgTex) bgTex.dispose();
     // RGB to match the canvas (no alpha channel): WebGL refuses to copy an RGB framebuffer into an RGBA texture
     bgTex = new THREE.DataTexture(new Uint8Array(W * H * 3), W, H, THREE.RGBFormat);
@@ -1883,12 +1906,24 @@ const creditFX = (() => {
     bgTex.needsUpdate = true;   // allocate it on the GPU once, so the framebuffer copy has somewhere to go
     mat.uniforms.bg.value = bgTex;
   }
+  // where the line sits now (it scrolls up with the page below the plinth): the quad covering it, in clip space, and
+  // where to copy the background from, in drawing-buffer pixels (origin bottom-left)
+  function place() {
+    const cv = renderer.domElement.getBoundingClientRect(), r = el.getBoundingClientRect(), { w, h, dpr } = box;
+    const left = r.left - pad, top = r.top - pad;
+    const x0 = (left - cv.left) / cv.width * 2 - 1, x1 = (left + w - cv.left) / cv.width * 2 - 1;
+    const y0 = 1 - (top + h - cv.top) / cv.height * 2, y1 = 1 - (top - cv.top) / cv.height * 2;
+    const pos = quad.geometry.attributes.position;
+    pos.setXY(0, x0, y1); pos.setXY(1, x1, y1); pos.setXY(2, x0, y0); pos.setXY(3, x1, y0); pos.needsUpdate = true;
+    box.x = Math.round((left - cv.left) * dpr); box.y = Math.round((cv.bottom - (top + h)) * dpr);
+  }
   addEventListener('resize', () => { dirty = true; });
   if (document.fonts) document.fonts.ready.then(() => { dirty = true; });
   return {
     draw() {
       if (dirty) build();
       if (!box) return;
+      place();
       const fb = renderer.getDrawingBufferSize(new THREE.Vector2());
       if (box.x < 0 || box.y < 0 || box.x + box.W > fb.x || box.y + box.H > fb.y) return;
       renderer.copyFramebufferToTexture(new THREE.Vector2(box.x, box.y), bgTex);
@@ -1944,8 +1979,11 @@ function frame(dt, t) {
     if (flyTo.t === 1) flyTo = null;
   }
   controls.update();
+  const drop = pageDrop();   // a pure translation, applied for this render only, so the controls never see it
+  if (drop) { camera.position.y -= drop; camera.updateMatrixWorld(); }
   renderer.render(scene, camera);
   creditFX.draw();
+  if (drop) { camera.position.y += drop; camera.updateMatrixWorld(); }
 }
 function tick() {
   const dt = Math.min(clock.getDelta(), 0.05);

@@ -21,12 +21,15 @@
 }
 html, body { height: 100%; margin: 0; }
 body { background: var(--wall); color: var(--text); overflow: hidden; }
+/* the scene stays put; in the close-up the document scrolls over it (exhibit.js moves the camera to match). #scene is
+   the first screen of the document, holding the credit line, which scrolls up as the page's header */
+#scene { position: relative; height: 100vh; height: 100svh; }
 #stage { position: fixed; inset: 0; }
 #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(0,0,0,.55) 100%); }
 
 #credit {
-  position: fixed; left: 16px; right: 16px;
+  position: absolute; left: 16px; right: 16px;
   bottom: calc(22px + env(safe-area-inset-bottom, 0px));
   margin: 0; text-align: center;
   font: 400 17px/1.4 var(--serif); letter-spacing: 0.02em;
@@ -38,14 +41,47 @@ body { background: var(--wall); color: var(--text); overflow: hidden; }
 #credit .sep { padding: 0 0.6em; opacity: .7; }
 #credit a { color: inherit; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; pointer-events: auto; }
 #credit a:focus-visible { outline: 1px dashed #808080; outline-offset: 3px; }
+
+/* The page under the plinth: in the close-up the document can scroll. The page has no background of its own: the
+   plinth rises with it (exhibit.js drops the camera to match) and its front face is the page, with the credit line
+   as the header. In the room view the document is locked and the wheel zooms instead. */
+body.scrollable { overflow-y: auto; }
+html, body { scrollbar-width: none; }
+body::-webkit-scrollbar, html::-webkit-scrollbar { display: none; }   /* no scrollbar over the scene */
+#about {
+  display: none; position: relative; z-index: 2;
+  min-height: 100vh; min-height: 100svh;
+  color: #1a1917;
+  font-family: var(--serif);
+}
+body.scrollable #about { display: block; }
+#about .sheet { max-width: 34rem; margin: 0 auto; padding: 28px 16px 18vh; }
+#about p { font-size: 20px; line-height: 1.55; margin: 0 0 1.1em; }
+#about a { color: inherit; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+#about a:focus-visible { outline: 1px dashed currentColor; outline-offset: 3px; }
+#about .links { margin: 2.2em 0; }
+#about .links a { display: inline-block; margin-right: 1.4em; }
+#about .credits { font-size: 15px; line-height: 1.5; opacity: .75; }
 </style>
 
 </head>
 <body>
+<div id="scene">
 <div id="stage"></div>
 <div class="vignette"></div>
 
 <p id="credit">The Diligent Shadow<span class="sep">&middot;</span>Tokyo Prototype 2026<span class="sep">&middot;</span><a href="https://www.instagram.com/reel/DdJPF6HNMod/" target="_blank" rel="noopener">Source</a></p>
+</div>
+
+<main id="about" aria-label="About the piece">
+  <div class="sheet">
+    <p>A switch stands on a white plinth in front of a wall. On the wall is the shadow of a woman sitting in a chair. When you turn the switch on, a lamp lights the wall, and she gets up, walks over to the switch's shadow and kicks it, and the switch turns off.</p>
+    <p>If you hold the switch on, her kicks fail. She leans on it, tries again, and eventually gives up and sulks, though now and then she runs at it once more. If you turn it off yourself, she walks back to her chair in the dark, and if you flip it back and forth too quickly, she loses her temper.</p>
+    <p>This is a web re-creation of Koya Endo's installation, shown at Tokyo Prototype 2026. Everything on the wall is a real shadow, cast by a single lamp from 3D objects that are never drawn.</p>
+    <p class="links"><a href="https://www.roblox.com/games/124537506753900/The-Diligent-Shadow" target="_blank" rel="noopener">Play it on Roblox</a></p>
+    <p class="credits">Hand: WebXR Input Profiles generic hand, MIT licence, &copy; 2019 Amazon. Figure: &ldquo;Animated Woman&rdquo; by Quaternius, CC0. Chair: &ldquo;Painted Wooden Chair 02&rdquo; by Kirill Sannikov, Poly Haven, CC0.</p>
+  </div>
+</main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
