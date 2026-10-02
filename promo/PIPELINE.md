@@ -23,7 +23,7 @@ Hand-off notes for the promo and devlog videos, so the work doesn't depend on an
 | 04 Her hair is cloth | **ink** | done; script rewritten in plain sentences (the model for the rest) |
 | 05 The visitor's hand | **ink** | done; script still opens with "How it works:" |
 | 06 The invisible cast, 07 Rigging her, 08 Smoothing her out, 09 Her brain is a state machine | classic | not yet restyled (their clips have labels baked in: they need ink clip versions with annotation data) |
-| 10 The Visitor, 11 The Shadow | cinematic | done; procedural score |
+| 10 The Visitor, 11 The Shadow | cinematic | done; procedural score. The Visitor's take was mis-aligned ("Someone." of the last line plays at the end of the line before): run align.py on it in the final pass |
 
 **Next: the final re-render of everything.** Before it:
 - Rewrite every script in plain, complete sentences (see the hair script): no spoken "Devlog." / "How it works:" openers, no punchy fragments, accurate words for what's on screen, no disclaimers.
@@ -49,7 +49,8 @@ node devkit/cdp.mjs launch <scratch>/chrome-profile          # headless Chrome (
 # narration (key file + project from the environment)
 GCP_PROJECT=<project> STYLE="clear, warm, friendly, unhurried" python3 voice.py <key> videos/<id>/vo.wav videos/<id>/script.json
 GCP_PROJECT=<project> python3 devkit/check_take.py <key> videos/<id>/vo.wav videos/<id>/script.json   # extra/missing words
-#   then set lines[0].start = 0 in vo.json, and:
+python3 devkit/align.py <id>        # line timings by aligning the whole transcript in order (voice.py's own per-chunk
+                                     # matching can hand a chunk to a later line that shares words)
 python3 devkit/words.py <id>
 # clips (ink): open the exhibit, then
 node devkit/cdp.mjs open "http://localhost:8780/games/thedilligentshadow/?h=1"

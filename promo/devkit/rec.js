@@ -15,6 +15,16 @@
     if (WIRE.length) return WIRE;
     const add = (src, color, tag) => {
       const mat = new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: 0, depthWrite: false, skinning: !!src.isSkinnedMesh });
+      // optionally drawn where its shadow falls: each vertex slid along its ray from the lamp onto the wall, so the
+      // wireframe outlines the shadow exactly (in wall-facing shots the 3D figure itself sits 14 cm in front of it)
+      mat.userData.u = { uOnWall: { value: 0 }, uLamp: { value: new THREE.Vector3() }, uWallZ: { value: WALL_Z + 0.004 } };
+      mat.onBeforeCompile = sh => {
+        Object.assign(sh.uniforms, mat.userData.u);
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uOnWall; uniform vec3 uLamp; uniform float uWallZ;')
+          .replace('#include <project_vertex>', `vec4 wpos = modelMatrix * vec4(transformed, 1.0);
+            if (uOnWall > 0.5) wpos.xyz = uLamp + (wpos.xyz - uLamp) * ((uWallZ - uLamp.z) / (wpos.z - uLamp.z));
+            vec4 mvPosition = viewMatrix * wpos; gl_Position = projectionMatrix * mvPosition;`);
+      };
       const m = src.isSkinnedMesh ? new THREE.SkinnedMesh(src.geometry, mat) : new THREE.Mesh(src.geometry, mat);
       if (src.isSkinnedMesh) { m.bind(src.skeleton, src.bindMatrix); m.bindMode = src.bindMode; }
       m.position.copy(src.position); m.quaternion.copy(src.quaternion); m.scale.copy(src.scale);
@@ -27,9 +37,10 @@
     if (hand.mesh) add(hand.mesh, 0x54e08a, 'hand');
     return WIRE;
   }
-  function drawWire(amount, tags) {
+  function drawWire(amount, tags, onWall) {
     if (amount <= 0.001) return;
-    for (const w of wires()) { w.m.material.opacity = tags.includes(w.tag) ? amount : 0; w.m.visible = tags.includes(w.tag); }
+    const L = lamp.getWorldPosition(new THREE.Vector3());
+    for (const w of wires()) { w.m.material.opacity = tags.includes(w.tag) ? amount : 0; w.m.visible = tags.includes(w.tag); const u = w.m.material.userData.u; u.uOnWall.value = onWall ? 1 : 0; u.uLamp.value.copy(L); }
     const bg = scene.background; scene.background = null;   // a colour background would clear the frame
     renderer.autoClear = false; camera.layers.set(1); renderer.clearDepth();
     draw(scene, camera);
@@ -140,7 +151,7 @@
       clay.color = o.clayColor; solid(typeof o.solid === 'function' ? o.solid(t) : !!o.solid);
       if (clay.on && clay.cam) clay.cam.position.copy(camera.position);
       renderer.setRenderTarget(null); draw(scene, camera);
-      if (o.wire) drawWire(typeof o.wire === 'function' ? o.wire(t) : o.wire, o.wireTags || ['figure', 'cloak', 'hair', 'chair']);
+      if (o.wire) drawWire(typeof o.wire === 'function' ? o.wire(t) : o.wire, o.wireTags || ['figure', 'cloak', 'hair', 'chair'], o.wireOnWall);
       if (o.credit) orig.credit.call(creditFX);
       gl.readPixels(0, 0, W, Hh, gl.RGBA, gl.UNSIGNED_BYTE, px);
       for (let y = 0; y < Hh; y++) img.data.set(px.subarray((Hh - 1 - y) * W * 4, (Hh - y) * W * 4), y * W * 4);

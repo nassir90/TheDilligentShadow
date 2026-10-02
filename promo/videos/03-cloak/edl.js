@@ -13,6 +13,6 @@
     { say: 4, layers: [{ type: 'clip', clip: 'ic_pops_before', from: 1.5, label: 'before' }] },
     { say: 5, layers: [{ type: 'clip', clip: 'ic_pops_after', from: 1.5, label: 'after' }, { type: 'code', snip: ['// static friction: cloth resting', 6] }], sfx: [{ at: 0.3, type: 'blip' }] },
     { say: 6, tail: 1, layers: [{ type: 'split', top: 0, h: 960, a: { clip: 'ic_pops_before_half', from: 1.5, label: 'before' }, b: { clip: 'ic_pops_after_half', from: 1.5, label: 'after' } }] },
-    { dur: 4.5, layers: [{ type: 'clip', clip: 'ic_pops_after', from: 7, ann: false }, { type: 'end' }] },
+    { dur: 4.5, layers: [{ type: 'clip', clip: 'ic_preroll', from: 1.25, speed: 0.5, ann: false }, { type: 'end' }] },   // over her sitting down, not a still
   ],
 })

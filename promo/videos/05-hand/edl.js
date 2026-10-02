@@ -10,6 +10,6 @@
     { say: 3, layers: [{ type: 'clip', clip: 'iha_springs' }, { type: 'code', snip: ['s.yaw.step(', 4] }], sfx: [{ at: 0.3, type: 'blip' }] },
     { say: 4, layers: [{ type: 'clip', clip: 'iha_dent', from: 0.3 }, { type: 'code', snip: ["bend('index-finger-phalanx-distal'", 2] }] },
     { say: 5, tail: 1, layers: [{ type: 'clip', clip: 'iha_fade', from: 0 }, { type: 'code', snip: ['float fadeA = (1.0 - smoothstep(fadeInner, fadeOuter + 0.015', 1] }] },
-    { dur: 4.5, layers: [{ type: 'clip', clip: 'iha_dent', from: 4 }, { type: 'end' }] },
+    { dur: 4.5, layers: [{ type: 'clip', clip: 'iha_springs', from: 1, ann: false }, { type: 'end' }] },   // over the hand moving, not a still
   ],
 })

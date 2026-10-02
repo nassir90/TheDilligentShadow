@@ -13,6 +13,6 @@
     { say: 6, layers: [{ type: 'clip', clip: 'ik_turn_after_tall', from: 0, speed: 0.6, ann: false }, { type: 'code', snip: ['const steps = Math.abs(d) > 0.9', 3] },
       { type: 'stat', label: 'foot slip while turning', from: 96, to: 0.7, dp: 1, unit: ' mm', top: 200, note: '96 mm on the old code · 0.7 mm now' }] },
     { say: 7, tail: 1.2, layers: [{ type: 'clip', clip: 'ik_montage', from: 0, speed: 1.6 }] },
-    { dur: 4.5, layers: [{ type: 'clip', clip: 'ik_montage', speed: 1.0, ann: false }, { type: 'end' }] },
+    { dur: 4.5, layers: [{ type: 'clip', clip: 'ik_montage', from: 0.5, ann: false }, { type: 'end' }] },   // over her walking, not a still
   ],
 })

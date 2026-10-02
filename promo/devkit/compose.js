@@ -257,30 +257,53 @@ function plainCode(g, L, tl, bottom) {
   if (reveal < 1 && Math.floor(tl * 3) % 2 === 0) g.fillRect(cx + 3, cy - size * 0.72, 2, size * 0.9);
   g.restore();
 }
-// a graph in the same plain style: a translucent black box, white lines (solid, then dashed), Times New Roman labels;
-// it sits just above the subtitles, like the code
+// a graph in the same plain style, drawn by Chart.js: a translucent black box, white lines (solid, then dashed),
+// Times New Roman title, legend and axis title, Menlo ticks; it sits just above the subtitles, like the code. Every piece
+// of its text goes into the crowding check as its own element.
 function plainGraph(g, L, tl, bottom) {
-  const x = 48, w = W - 96, h = L.h || 470, y = L.y ?? (bottom - h), a = ease(tl / 0.3);
-  const ser = L.series.map(sr => sr.data || clips[sr.clip].meta.frames.slice(Math.round((sr.from || 0) * 30), Math.round(((sr.from || 0) + L.dur) * 30)).map(m => sr.f(m)));
-  const ym = L.ymax || Math.max(...ser.flat()) * 1.1 || 1;
-  g.save(); g.globalAlpha = a * 0.84; g.fillStyle = '#000'; g.fillRect(x, y, w, h); g.globalAlpha = a;
-  BOXES.push({ group: 'graph', x0: x, x1: x + w, y0: y, y1: y + h, size: 30, text: 'graph box' });
-  g.fillStyle = '#fff'; g.strokeStyle = '#fff'; g.font = `400 34px ${SERIF}`; g.fillText(L.title, x + 30, y + 52);
-  const px = x + 96, py = y + 90, pw = w - 130, ph = h - 170;
-  g.font = `400 24px ${MONO}`; g.globalAlpha = a * 0.6; g.lineWidth = 1;
-  for (let k = 0; k <= 2; k++) { const yy = py + ph - ph * k / 2; g.beginPath(); g.moveTo(px, yy); g.lineTo(px + pw, yy); g.stroke(); g.fillText(String(+(ym * k / 2).toPrecision(2)), x + 22, yy + 8); }
-  g.fillText(L.unit || '', x + 22, py - 22); g.fillText(`${L.dur} s`, px + pw - 50, py + ph + 36);
-  g.globalAlpha = a;
-  const prog = clamp((tl - 0.3) / (L.revealDur || 2.5), 0, 1);
-  ser.forEach((d, si) => {
-    const n = Math.max(1, Math.floor(d.length * prog));
-    g.lineWidth = 4; g.setLineDash(si ? [14, 10] : []); g.beginPath();
-    for (let i = 0; i < n; i++) { const xx = px + pw * i / (d.length - 1), yy = py + ph - ph * clamp(d[i] / ym, 0, 1); i ? g.lineTo(xx, yy) : g.moveTo(xx, yy); }
-    g.stroke();
-    const lx = px + si * pw / 2, ly = y + h - 30; g.beginPath(); g.moveTo(lx, ly - 10); g.lineTo(lx + 50, ly - 10); g.stroke(); g.setLineDash([]);
-    g.font = `400 30px ${SERIF}`; g.fillText(L.series[si].label, lx + 64, ly);
-  });
-  g.restore();
+  const x = 48, w = W - 96, h = L.h || 540, y = L.y ?? (bottom - h), a = ease(tl / 0.3);
+  if (!L._chart) {
+    const ser = L.series.map(sr => sr.data || clips[sr.clip].meta.frames.slice(Math.round((sr.from || 0) * 30), Math.round(((sr.from || 0) + L.dur) * 30)).map(m => sr.f(m)));
+    L._full = ser.map(d => d.map((v, i) => ({ x: i / 30, y: v })));
+    const ym = L.ymax || +(Math.max(...ser.flat()) * 1.15).toPrecision(2);
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const tick = { color: 'rgba(255,255,255,0.75)', font: { family: 'Menlo', size: 22 } }, grid = { color: 'rgba(255,255,255,0.13)' };
+    L._chart = new Chart(cv.getContext('2d'), {
+      type: 'line',
+      data: { datasets: L.series.map((sr, si) => ({ label: sr.label, data: [], borderColor: '#fff', backgroundColor: '#fff', borderWidth: 4, borderDash: si ? [14, 10] : [], pointRadius: 0, tension: 0.15 })) },
+      options: {
+        responsive: false, animation: false, devicePixelRatio: 1, layout: { padding: { left: 22, right: 30, top: 18, bottom: 14 } },
+        plugins: {
+          title: { display: true, text: L.title, color: '#fff', align: 'start', font: { family: 'Times New Roman', size: 34, weight: 'normal' }, padding: { top: 4, bottom: 18 } },
+          legend: { position: 'bottom', align: 'start', labels: { color: '#fff', font: { family: 'Times New Roman', size: 28 }, boxWidth: 46, boxHeight: 3, padding: 26 } },
+          tooltip: { enabled: false },
+        },
+        scales: {
+          x: { type: 'linear', min: 0, max: L.dur, ticks: { ...tick, stepSize: L.dur <= 4 ? 1 : 2, callback: v => `${v} s` }, grid, border: { color: 'rgba(255,255,255,0.4)' } },
+          y: { min: 0, suggestedMax: ym, ticks: { ...tick, maxTicksLimit: 4, callback: v => (v === 0 ? '' : +v.toPrecision(3)) }, grid,   // the corner is zero already: its two labels collided border: { color: 'rgba(255,255,255,0.4)' },
+            title: { display: !!L.unit, text: L.unit, color: 'rgba(255,255,255,0.75)', font: { family: 'Times New Roman', size: 26 } } },
+        },
+      },
+    });
+  }
+  const ch = L._chart, prog = clamp((tl - 0.3) / (L.revealDur || 2.5), 0, 1);
+  ch.data.datasets.forEach((ds, si) => { const d = L._full[si]; ds.data = d.slice(0, Math.max(1, Math.floor(d.length * prog))); });
+  ch.update('none');
+  g.save(); g.globalAlpha = a * 0.84; g.fillStyle = '#000'; g.fillRect(x, y, w, h); g.globalAlpha = a; g.drawImage(ch.canvas, x, y); g.restore();
+  // text boxes for the crowding check (chart pixels → frame)
+  const box = (group, l, t, r, b, size, text) => BOXES.push({ group, x0: x + l, x1: x + r, y0: y + t, y1: y + b, size, text });
+  const cx = ch.ctx, tb = ch.titleBlock;
+  if (tb) { cx.font = '34px "Times New Roman"'; const tw = cx.measureText(L.title).width; box('graph.title', tb.left, tb.top + 4, tb.left + tw, tb.top + 4 + 34, 34, L.title); }
+  (ch.legend.legendHitBoxes || []).forEach((hb, i) => box('graph.legend#' + i, hb.left, hb.top, hb.left + hb.width, hb.top + hb.height, 28, L.series[i].label));
+  for (const [id, sc] of Object.entries(ch.scales)) {
+    cx.font = '22px Menlo';
+    sc.ticks.forEach((tk, i) => {
+      const lab = String(tk.label ?? ''), tw = cx.measureText(lab).width, p = sc.getPixelForTick(i); if (!lab) return;
+      if (id === 'x') box('graph.xtick#' + i, p - tw / 2, sc.top + 8, p + tw / 2, sc.top + 8 + 22, 22, lab);
+      else box('graph.ytick#' + i, sc.right - 10 - tw, p - 11, sc.right - 10, p + 11, 22, lab);
+    });
+    if (id === 'y' && L.unit) { cx.font = '26px "Times New Roman"'; const tw = cx.measureText(L.unit).width, mid = (sc.top + sc.bottom) / 2; box('graph.ytitle', sc.left, mid - tw / 2, sc.left + 26, mid + tw / 2, 26, L.unit); }
+  }
 }
 function pill(g, text, x, y, color, size = 30) {
   g.save(); g.font = `700 ${size}px ${SANS}`; const w = g.measureText(text).width + size * 1.1, h = size * 1.6;
@@ -469,7 +492,7 @@ async function drawClipLayer(g, L, tl, rect) {
   const map = cover(g, img, x, y, w, h, L.fx ?? 0.5, L.fy ?? 0.5); g.restore();
   if (STYLE === 'ink') {
     if (meta.ann && L.ann !== false) { ig.save(); ig.beginPath(); ig.rect(x, y, w, h); ig.clip(); drawAnn(meta.ann, map, L.clip + '@' + y, NOW); ig.restore(); }
-    if (L.label) inkCut(L.label, x + 36, y + (L.labelY ?? 36));
+    if (L.label && rect) inkCut(L.label, x + 36, y + (L.labelY ?? 36));   // before/after labels only on a split comparison
   } else if (L.label) pill(g, L.label, x + 30, y + 30, L.labelColor || (L.label.startsWith('BEFORE') ? C.red : C.green));
   return meta;
 }

@@ -54,7 +54,7 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
     '02-feet': [
       walk('ik_walk_before', 960, ['naiveWalk']), walk('ik_walk_after', 960, []), walk('ik_walk_before_tall', 1920, ['naiveWalk']),
       turnClip('ik_turn_before', 960, ['spinTurn']), turnClip('ik_turn_after', 960, []), turnClip('ik_turn_after_tall', 1920, []),
-      (() => { const f = feet(); return { name: 'ik_gait', w: 1080, h: 1920, dur: 11, wire: t => 0.25 + 0.75 * (0.5 - 0.5 * Math.cos(t / 4 * Math.PI * 2)), wireTags: ['figure'],
+      (() => { const f = feet(); return { name: 'ik_gait', w: 1080, h: 1920, dur: 11, wireOnWall: true, wire: t => 0.25 + 0.75 * (0.5 - 0.5 * Math.cos(t / 4 * Math.PI * 2)), wireTags: ['figure'],
         setup: H => { H.lights(true); H.hold(true); H.stand(STRIKE.x, -1); S.mode = 'giveupWalk'; S.t = 0; },
         cam: (t, H) => { const x = clamp(fig.x, -0.62, -0.25), at = H.wallPt(x, 0.04); return { pos: V(at.x, at.y, at.z + 0.85), at, fov: 36 }; },
         overlay(g, t, P, H, m) {
@@ -66,11 +66,11 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
           }
           m.ann = ann;
         } }; })(),
-      { name: 'ik_ik', w: 1080, h: 1920, dur: 8, wire: 0.35, wireTags: ['figure'],
+      { name: 'ik_ik', w: 1080, h: 1920, dur: 8, wireOnWall: true, wire: 0.35, wireTags: ['figure'],
         setup: H => { H.lights(true); H.hold(true); H.stand(STRIKE.x, -1); S.mode = 'giveupWalk'; S.t = 0; },
         cam: (t, H) => { const x = clamp(fig.x, -0.62, -0.25), at = H.wallPt(x, 0.0), c = H.wallPt(x, 0.08); return { pos: V(c.x, c.y, c.z + 0.85), at: V(at.x, at.y, at.z + 0.14), fov: 36 }; },
         overlay(g, t, P, H, m) {
-          const ann = [], pt = n => P(H.bonePos(n)).slice(0, 2);
+          const ann = [], pt = n => P(H.onWall(H.bonePos(n))).slice(0, 2);   // on the shadow, like the wireframe
           for (const s of ['R', 'L']) ann.push({ k: 'line', w: 5, pts: [pt(`UpperLeg.${s}`), pt(`LowerLeg.${s}`), pt(`LowerLeg.${s}_end`)] });
           const [hx, hy] = pt('UpperLeg.R'), [ax, ay] = pt('LowerLeg.R_end');
           ann.push({ k: 'call', id: 'hip', x: hx, y: hy, r: 26, dx: -190, dy: -150, text: 'hip joint' });
@@ -137,10 +137,10 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
         overlay(g, t, P, H, m) { const [x, y] = P(H.bonePos('Hips')); m.ann = [{ k: 'call', id: 'phase', x, y, r: 40, dx: 230, dy: -300, text: t < 1 ? 'stand, let it hang' : t < 3.4 ? 'sit down' : 'settle' }]; } },
     ],
     '04-hair': [
-      { name: 'ih_wire', w: 1080, h: 1920, dur: 14, hide: ['cloak'], solid: t => wave(t, 4) < 0.5, wire: t => 0.35 + 0.65 * wave(t, 4), wireTags: ['hair', 'figure'], setup: H => { H.lights(true); H.hold(true); H.stand(FRONT_X, 1); S.mode = 'approach'; S.t = 0; S.patience = 99; }, cam: hairTall },
+      { name: 'ih_wire', w: 1080, h: 1920, dur: 14, prerun: 3, hide: ['cloak'], solid: t => wave(t, 4) < 0.5, wire: t => 0.35 + 0.65 * wave(t, 4), wireTags: ['hair', 'figure'], setup: H => { H.lights(true); H.hold(true); H.stand(FRONT_X, 1); S.mode = 'approach'; S.t = 0; S.patience = 99; }, cam: hairTall },
       ...[['before', ['rawCloth']], ['after', []]].flatMap(([k, mods]) => [
-        { name: `ih_${k}`, w: 1080, h: 960, dur: 9, hide: ['cloak'], solid: true, mods, dtAt: noisy(), wire: 1, wireTags: ['hair'], setup: standStill, cam: hairHalf },
-        { name: `ih_${k}_tall`, w: 1080, h: 1920, dur: 20, hide: ['cloak'], solid: true, mods, dtAt: noisy(), wire: 1, wireTags: ['hair'], setup: standStill, cam: hairTall },
+        { name: `ih_${k}`, w: 1080, h: 960, dur: 9, prerun: 3, hide: ['cloak'], solid: true, mods, dtAt: noisy(), wire: 1, wireTags: ['hair'], setup: standStill, cam: hairHalf },
+        { name: `ih_${k}_tall`, w: 1080, h: 1920, dur: 20, prerun: 3, hide: ['cloak'], solid: true, mods, dtAt: noisy(), wire: 1, wireTags: ['hair'], setup: standStill, cam: hairTall },
       ]),
     ],
     '05-hand': [

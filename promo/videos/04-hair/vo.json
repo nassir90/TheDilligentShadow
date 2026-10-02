@@ -1,35 +1,35 @@
 {
- "duration": 57.0,
+ "duration": 57.56,
  "lines": [
   {
    "line": "Her hair is simulated as cloth.",
    "start": 0.0,
-   "end": 2.971
+   "end": 2.716
   },
   {
    "line": "It's a grid of points hanging from the back of her head. Each point is linked to its neighbours, and gravity pulls the whole sheet down.",
-   "start": 3.461,
-   "end": 12.459
+   "start": 3.247,
+   "end": 11.888
   },
   {
    "line": "In an early version, her hair jittered uncontrollably, even when she was standing still.",
-   "start": 12.833,
-   "end": 18.312
+   "start": 13.17,
+   "end": 18.496
   },
   {
    "line": "The simulation moved forward once per frame, by however long that frame took to draw. Frames don't all take the same time, so the steps kept changing size, and the hair never settled. The top of the hair also jumped to her head once per frame, instead of following it smoothly.",
-   "start": 18.743,
-   "end": 37.005
+   "start": 18.796,
+   "end": 37.722
   },
   {
    "line": "Now the simulation moves forward in small, equal steps, two hundred and forty times a second. The top of the hair glides along with her head between frames, and each frame shows a blend of the last two steps.",
-   "start": 37.349,
-   "end": 51.371
+   "start": 38.425,
+   "end": 51.762
   },
   {
-   "line": "Standing still, her hair now moves about one percent as much as it used to.",
-   "start": 51.942,
-   "end": 56.625
+   "line": "Standing still, her hair now moves about two percent as much as it used to.",
+   "start": 53.05,
+   "end": 57.31
   }
  ],
  "heard": [
@@ -37,21 +37,21 @@
   "It's a grid of points hanging from the back of her head.",
   "Each point is linked to its neighbors.",
   "And gravity pulls the whole sheet down.",
-  ".",
   "In an early version, her hair jittered uncontrollably.",
-  "Even when she was standing still,",
+  "even when she was standing still.",
+  "Transcribe this speech exactly.",
   "The simulation moved forward once per frame.",
   "by however long that frame took to draw.",
-  "Frames don't all take the same time.",
-  "So the steps kept changing size and the hair never settled.",
-  "I'm",
-  "The top of the hair also jumped to her head once per frame instead of following it smoothly.",
   "Transcribe this exactly. Reply with only the words spoken.",
-  "Now the simulation moves forward in small, equal steps.",
+  "frames don't all take the same time, so the steps kept changing size and the hair never settled.",
+  "The top of the hair also jumped to her head once per frame.",
+  "instead of following it smoothly.",
+  "Oh,",
+  "Now, the simulation moves forward in small, equal steps.",
   "240 times a second.",
+  "-",
   "The top of the hair glides along with her head between frames.",
-  "And each frame shows a blend of the last two steps.",
-  "Standing still?",
-  "Her hair now moves about 1% as much as it used to."
+  "and each frame shows a blend of the last two steps.",
+  "Standing still, her hair now moves about 2% as much as it used to."
  ]
 }
