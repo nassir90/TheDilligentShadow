@@ -74,7 +74,7 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
           for (const s of ['R', 'L']) ann.push({ k: 'line', w: 5, pts: [pt(`UpperLeg.${s}`), pt(`LowerLeg.${s}`), pt(`LowerLeg.${s}_end`)] });
           const [hx, hy] = pt('UpperLeg.R'), [ax, ay] = pt('LowerLeg.R_end');
           ann.push({ k: 'call', x: hx, y: hy, r: 26, dx: -190, dy: -150, text: 'hip joint' });
-          ann.push({ k: 'call', x: ax, y: ay, r: 30, dx: 170, dy: -130, text: 'planted ankle' });
+          ann.push({ k: 'call', x: ax, y: ay, r: 30, dx: 230, dy: 45, text: 'planted ankle' });   // out to the side: clear of the leg lines and the code box
           m.ann = ann;
         } },
       (() => { const f = feet(); return { name: 'ik_montage', w: 1080, h: 1920, dur: 20,

@@ -53,7 +53,7 @@ function applyInk(g) {
 const BOXES = [];
 function tbox(group, ctx, text, x, y, size) {   // box of text drawn at (x, y) with ctx's current font and alignment
   const m = ctx.measureText(text), l = x - m.actualBoundingBoxLeft, r = x + m.actualBoundingBoxRight;
-  BOXES.push({ group, x0: l, x1: r, y0: y - m.actualBoundingBoxAscent, y1: y + m.actualBoundingBoxDescent, size, text });
+  BOXES.push({ group, name: group.startsWith('call#') ? `callout "${text}"` : group, x0: l, x1: r, y0: y - m.actualBoundingBoxAscent, y1: y + m.actualBoundingBoxDescent, size, text });
 }
 function crowding(t) {
   const st = STATUS.crowd ||= { frames: 0, overlaps: {}, tight: {}, worstGap: Infinity, worstPair: '' };
@@ -61,7 +61,7 @@ function crowding(t) {
   for (let i = 0; i < BOXES.length; i++) for (let j = i + 1; j < BOXES.length; j++) {
     const a = BOXES[i], b = BOXES[j]; if (a.group === b.group) continue;
     const hx = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0); if (hx <= 0) continue;   // not stacked
-    const gap = Math.max(a.y0, b.y0) - Math.min(a.y1, b.y1), key = `${a.group} × ${b.group}`;
+    const gap = Math.max(a.y0, b.y0) - Math.min(a.y1, b.y1), key = `${a.name || a.group} × ${b.name || b.group}`;
     const need = 0.25 * Math.min(a.size, b.size);
     if (gap < 0) { st.overlaps[key] = (st.overlaps[key] || 0) + 1; bad = true; }
     else if (gap < need) { st.tight[key] = (st.tight[key] || 0) + 1; bad = true; }
@@ -70,7 +70,17 @@ function crowding(t) {
   if (bad) st.frames++;
   BOXES.length = 0;
 }
-// a square block with the word cut out of it (lowercase, regular weight): the whole block is black or white, by the
+// a square block with the word cut out of it, drawn into the ink mask: the block is inked pixel by pixel like all
+// the other text, and the word shows the video through it
+function inkCut(text, x, y, size = 34) {
+  text = text.toLowerCase();
+  ig.save(); ig.font = `400 ${size}px ${SERIF}`; const w = Math.ceil(ig.measureText(text).width + size * 0.8), h = Math.ceil(size * 1.4);
+  ig.fillStyle = '#fff'; ig.fillRect(x, y, w, h);
+  ig.globalCompositeOperation = 'destination-out'; ig.textBaseline = 'alphabetic'; ig.fillText(text, x + size * 0.4, y + h * 0.7);
+  ig.restore();
+  BOXES.push({ group: 'label:' + text + y, x0: x, x1: x + w, y0: y, y1: y + h, size, text });
+}
+// (classic) a square block with the word cut out of it (lowercase, regular weight): the whole block is black or white, by the
 // average brightness behind it
 function cutLabel(g, text, x, y, size = 34) {
   text = text.toLowerCase();
@@ -95,11 +105,11 @@ function drawAnn(list, map) {
       const [cx, cy] = map(a.x, a.y), r = (a.r || 34) * 0.55, size = a.size || 36;
       ig.font = `400 ${size}px ${SERIF}`; const tw = ig.measureText(a.text).width;
       let dx = a.dx; if (cx + dx - tw < 24 && dx < 0) dx = -dx; else if (cx + dx + tw > W - 24 && dx > 0) dx = -dx;   // keep it on screen
-      const lx = cx + dx, ly = cy + a.dy, left = dx < 0, ux1 = left ? lx - tw - 6 : lx + tw + 6, uy = ly + 10;
+      const lx = cx + dx, ly = cy + a.dy, left = dx < 0, ux1 = left ? lx - tw - 14 : lx + tw + 14, uy = ly + Math.round(size * 0.3) + 7;   // below descenders (p, g, y)
       const ang = Math.atan2(uy - cy, lx - cx), ex = cx + Math.cos(ang) * r, ey = cy + Math.sin(ang) * r;
       ig.beginPath(); ig.arc(cx, cy, r, 0, 7); ig.stroke();
       ig.beginPath(); ig.moveTo(ex, ey); ig.lineTo(lx, uy); ig.lineTo(ux1, uy); ig.stroke();
-      ig.textAlign = left ? 'right' : 'left'; const tx = lx + (left ? -3 : 3); ig.fillText(a.text, tx, ly);
+      ig.textAlign = left ? 'right' : 'left'; const tx = lx + (left ? -9 : 9); ig.fillText(a.text, tx, ly);
       tbox('call#' + (drawAnn.n = (drawAnn.n || 0) + 1), ig, a.text, tx, ly, size); ig.textAlign = 'left';   // each callout is its own element
     }
   }
@@ -142,8 +152,8 @@ function inkStat(L, tl) {
 // sits as low as it can while keeping clear of the segment's subtitles
 function plainCode(g, L, tl, bottom) {
   const sn = L.snip ? snippet(...L.snip) : { text: L.text, line: 1 };
-  const size = L.size || 34, lh = size * 1.28, x = L.x ?? 48, w = L.w ?? (W - 96), pad = 30;
-  g.save(); g.font = `400 ${size}px ${SERIF}`;
+  const size = L.size || 27, lh = size * 1.45, x = L.x ?? 48, w = L.w ?? (W - 96), pad = 30;
+  g.save(); g.font = `400 ${size}px ${MONO}`;
   const rows = [];   // long lines wrap inside the box, continuing with an extra indent
   for (const ln of sn.text.split('\n')) {
     const ind = ln.match(/^ */)[0]; let rest = ln;
@@ -161,7 +171,7 @@ function plainCode(g, L, tl, bottom) {
   let shown = Math.floor(total * reveal), cx = x + pad, cy = y + pad + size * 0.75;
   rows.forEach((r, i) => {
     const yy = y + pad + size * 0.75 + i * lh, piece = r.slice(0, Math.max(0, shown)); shown -= r.length;
-    g.fillText(piece.replace(/^ +/, m => ' '.repeat(m.length / 2)), x + pad, yy);
+    g.fillText(piece, x + pad, yy);
     if (piece.length || i === 0) { cx = x + pad + g.measureText(piece).width; cy = yy; }
   });
   if (reveal < 1 && Math.floor(tl * 3) % 2 === 0) g.fillRect(cx + 3, cy - size * 0.72, 2, size * 0.9);
@@ -354,7 +364,7 @@ async function drawClipLayer(g, L, tl, rect) {
   const map = cover(g, img, x, y, w, h, L.fx ?? 0.5, L.fy ?? 0.5); g.restore();
   if (STYLE === 'ink') {
     if (meta.ann && L.ann !== false) { ig.save(); ig.beginPath(); ig.rect(x, y, w, h); ig.clip(); drawAnn(meta.ann, map); ig.restore(); }
-    if (L.label) L._cut = [L.label, x + 36, y + (L.labelY ?? 36)];
+    if (L.label) inkCut(L.label, x + 36, y + (L.labelY ?? 36));
   } else if (L.label) pill(g, L.label, x + 30, y + 30, L.labelColor || (L.label.startsWith('BEFORE') ? C.red : C.green));
   return meta;
 }
@@ -383,7 +393,7 @@ async function run(id, opts = {}) {
     const cuts = [];
     for (const L of s.layers || []) {
       if (L.type === 'clip') await drawClipLayer(g, L, tl);
-      else if (L.type === 'split') { await drawClipLayer(g, L.a, tl, [0, L.top ?? 0, W, (L.h ?? 960)]); await drawClipLayer(g, L.b, tl, [0, (L.top ?? 0) + (L.h ?? 960), W, (L.h ?? 960)]); g.fillStyle = '#0b0c0f'; g.fillRect(0, (L.top ?? 0) + (L.h ?? 960) - 3, W, 6); }
+      else if (L.type === 'split') { await drawClipLayer(g, L.a, tl, [0, L.top ?? 0, W, (L.h ?? 960)]); await drawClipLayer(g, L.b, tl, [0, (L.top ?? 0) + (L.h ?? 960), W, (L.h ?? 960)]); if (STYLE !== 'ink') { g.fillStyle = '#0b0c0f'; g.fillRect(0, (L.top ?? 0) + (L.h ?? 960) - 3, W, 6); } }
       else if (L.type === 'code') { if (STYLE === 'ink') { L._code = true; } else code(g, L, tl); }
       else if (L.type === 'graph') graph(g, L, tl);
       else if (L.type === 'text') textLayer(g, L, tl);
