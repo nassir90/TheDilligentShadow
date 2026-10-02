@@ -1,59 +1,57 @@
 {
- "duration": 38.88,
+ "duration": 57.0,
  "lines": [
   {
-   "line": "Devlog. Her hair is cloth.",
+   "line": "Her hair is simulated as cloth.",
    "start": 0.0,
-   "end": 3.135
+   "end": 2.971
   },
   {
-   "line": "A sheet of particles, pinned to the back of her head, held together by links, and pulled down by gravity.",
-   "start": 3.825,
-   "end": 10.142
+   "line": "It's a grid of points hanging from the back of her head. Each point is linked to its neighbours, and gravity pulls the whole sheet down.",
+   "start": 3.461,
+   "end": 12.459
   },
   {
-   "line": "At first it shimmered. Here's roughly how: one physics step per frame, with whatever time that frame took.",
-   "start": 10.673,
-   "end": 18.514
+   "line": "In an early version, her hair jittered uncontrollably, even when she was standing still.",
+   "start": 12.833,
+   "end": 18.312
   },
   {
-   "line": "Frame times wobble, so the physics wobbled too. And the pinned row jumped straight to her head every frame.",
-   "start": 18.859,
-   "end": 27.03
+   "line": "The simulation moved forward once per frame, by however long that frame took to draw. Frames don't all take the same time, so the steps kept changing size, and the hair never settled. The top of the hair also jumped to her head once per frame, instead of following it smoothly.",
+   "start": 18.743,
+   "end": 37.005
   },
   {
-   "line": "Now the cloth steps at a fixed two hundred and forty hertz. The pins glide between frames, and drawing blends the last two states.",
-   "start": 27.468,
-   "end": 36.131
+   "line": "Now the simulation moves forward in small, equal steps, two hundred and forty times a second. The top of the hair glides along with her head between frames, and each frame shows a blend of the last two steps.",
+   "start": 37.349,
+   "end": 51.371
   },
   {
-   "line": "Same hair. No shimmer.",
-   "start": 36.811,
-   "end": 38.538
+   "line": "Standing still, her hair now moves about one percent as much as it used to.",
+   "start": 51.942,
+   "end": 56.625
   }
  ],
  "heard": [
-  "Devlog.",
-  "Her hair",
-  "is cloth",
-  "a sheet of particles",
-  "pin to the back of her head",
-  "held together by links and pulled down by gravity.",
-  "At first, it's shimmered.",
-  "Here's roughly how.",
-  "Transcribe this speech exactly. Reply with only the words spoken.",
-  "One physics step per frame.",
-  "with whatever time that frame took.",
-  "Frame times wobble.",
-  "So, the physics wobble too.",
-  "Oh.",
-  "And the pinned row jumped straight to her head every frame.",
-  "Oh.",
-  "I",
-  "Now the cloth steps at a fixed 240 hertz.",
-  "The pins glide between frames.",
-  "And drawing blends the last two states.",
-  "Same here.",
-  "No shimmer."
+  "Her hair is simulated as cloth.",
+  "It's a grid of points hanging from the back of her head.",
+  "Each point is linked to its neighbors.",
+  "And gravity pulls the whole sheet down.",
+  ".",
+  "In an early version, her hair jittered uncontrollably.",
+  "Even when she was standing still,",
+  "The simulation moved forward once per frame.",
+  "by however long that frame took to draw.",
+  "Frames don't all take the same time.",
+  "So the steps kept changing size and the hair never settled.",
+  "I'm",
+  "The top of the hair also jumped to her head once per frame instead of following it smoothly.",
+  "Transcribe this exactly. Reply with only the words spoken.",
+  "Now the simulation moves forward in small, equal steps.",
+  "240 times a second.",
+  "The top of the hair glides along with her head between frames.",
+  "And each frame shows a blend of the last two steps.",
+  "Standing still?",
+  "Her hair now moves about 1% as much as it used to."
  ]
 }

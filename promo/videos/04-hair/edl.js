@@ -12,6 +12,7 @@
         series: [{ label: 'one step per frame', clip: 'ih_before', f: m => m.hairJerk * 1000 }, { label: 'fixed 240 Hz steps', clip: 'ih_after', f: m => m.hairJerk * 1000 }] }] },
     { say: 4, layers: [{ type: 'clip', clip: 'ih_after_tall', from: 0, label: 'after' }, { type: 'code', snip: ['const H = 1 / 240;', 10] }], sfx: [{ at: 0.3, type: 'blip' }] },
     { say: 5, tail: 1.2, layers: [{ type: 'split', top: 0, h: 960, a: { clip: 'ih_before', from: 2, label: 'before' }, b: { clip: 'ih_after', from: 2, label: 'after' } }] },
-    { dur: 4.5, layers: [{ type: 'clip', clip: 'ih_wire', from: 4 }, { type: 'end' }] },
+    // the end card sits over her walking up and kicking, hair swinging: not a still frame
+    { dur: 4.5, layers: [{ type: 'clip', clip: 'ih_wire', from: 0.5 }, { type: 'end' }] },
   ],
 })

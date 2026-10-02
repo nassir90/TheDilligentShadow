@@ -137,10 +137,10 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
         overlay(g, t, P, H, m) { const [x, y] = P(H.bonePos('Hips')); m.ann = [{ k: 'call', id: 'phase', x, y, r: 40, dx: 230, dy: -300, text: t < 1 ? 'stand, let it hang' : t < 3.4 ? 'sit down' : 'settle' }]; } },
     ],
     '04-hair': [
-      { name: 'ih_wire', w: 1080, h: 1920, dur: 12, hide: ['cloak'], solid: t => wave(t, 4) < 0.5, wire: t => 0.35 + 0.65 * wave(t, 4), wireTags: ['hair', 'figure'], setup: H => { H.lights(true); H.hold(true); H.stand(FRONT_X, 1); S.mode = 'approach'; S.t = 0; S.patience = 99; }, cam: hairTall },
+      { name: 'ih_wire', w: 1080, h: 1920, dur: 14, hide: ['cloak'], solid: t => wave(t, 4) < 0.5, wire: t => 0.35 + 0.65 * wave(t, 4), wireTags: ['hair', 'figure'], setup: H => { H.lights(true); H.hold(true); H.stand(FRONT_X, 1); S.mode = 'approach'; S.t = 0; S.patience = 99; }, cam: hairTall },
       ...[['before', ['rawCloth']], ['after', []]].flatMap(([k, mods]) => [
         { name: `ih_${k}`, w: 1080, h: 960, dur: 9, hide: ['cloak'], solid: true, mods, dtAt: noisy(), wire: 1, wireTags: ['hair'], setup: standStill, cam: hairHalf },
-        { name: `ih_${k}_tall`, w: 1080, h: 1920, dur: 10, hide: ['cloak'], solid: true, mods, dtAt: noisy(), wire: 1, wireTags: ['hair'], setup: standStill, cam: hairTall },
+        { name: `ih_${k}_tall`, w: 1080, h: 1920, dur: 20, hide: ['cloak'], solid: true, mods, dtAt: noisy(), wire: 1, wireTags: ['hair'], setup: standStill, cam: hairTall },
       ]),
     ],
     '05-hand': [
