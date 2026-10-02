@@ -224,8 +224,8 @@
       { name: 'sha_rise', w: 1080, h: 1920, dur: 9, setup: H => { H.lights(false); H.hold(false); H.seat(); S.minSit = 0; S.t = 99; },
         update(t) { if (t >= 1.0 && t < 1.04) { setOn(true, 'key'); tilt = -SW.maxTilt; S.wait = 0.7; } }, cam: (t, H) => H.wallCam(-0.58, 0.22, 1.3 - 0.1 * t / 9, 38) },
       { name: 'sha_kick', w: 1080, h: 1920, dur: 6, setup: H => { H.lights(true); H.hold(false); H.stand(STRIKE.x - 0.25, 1); S.mode = 'approach'; S.t = 0; S.patience = 99; }, cam: (t, H) => H.wallCam(STRIKE.x - 0.04, 0.22, 0.85, 36) },
-      { name: 'sha_wide', w: 1080, h: 1920, dur: 14, setup: H => { H.lights(false); H.hold(false); H.seat(); S.minSit = 0; S.t = 99; },
-        update(t) { if (t >= 1.0 && t < 1.04) { setOn(true, 'key'); tilt = -SW.maxTilt; S.wait = 0.5; } }, cam: t => ({ pos: V(0, 1.72, 7.6 - 1.2 * ease(t / 14)), at: V(0, 1.58, -1), fov: 44 }) },
+      { name: 'sha_wide', w: 1080, h: 1920, dur: 16, setup: H => { H.lights(false); H.hold(false); H.seat(); S.minSit = 0; S.t = 99; },
+        update(t) { if (t >= 1.0 && t < 1.04) { setOn(true, 'key'); tilt = -SW.maxTilt; S.wait = 0.5; } }, cam: t => ({ pos: V(0, 1.72, 7.6 - 1.2 * ease(t / 16)), at: V(0, 1.58, -1), fov: 44 }) },
     ],
   };
 })();

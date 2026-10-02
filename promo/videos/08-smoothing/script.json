@@ -1,20 +1,20 @@
 [
  {
-  "say": "Devlog. Smoothing her out."
+  "say": "Her movements used to be jerky, and this is how they were smoothed out."
  },
  {
-  "say": "Poses change instantly. With nothing in between, her head and arms snapped from one to the next."
+  "say": "Her poses change instantly. With nothing in between, her head and arms snapped from one pose to the next."
  },
  {
-  "say": "Now her upper body follows the pose through a critically damped filter. About eighty milliseconds, and it never overshoots."
+  "say": "Now her upper body follows each pose through a critically damped filter. It takes about eighty milliseconds to catch up, and it never overshoots."
  },
  {
-  "say": "Her legs skip the filter, so her feet stay exactly planted."
+  "say": "Her legs skip the filter, so her feet stay exactly where they are planted."
  },
  {
-  "say": "But her back still moved like a plank. So each segment of her spine got its own spring, looser toward the head."
+  "say": "Her back still moved as if it were one stiff board, so each segment of her spine was given its own spring, which gets looser towards her head."
  },
  {
-  "say": "Now her back gives a little when she sets off, stops, or lands in the chair, and then it settles."
+  "say": "Now her back bends a little when she sets off, when she stops, and when she drops into the chair, and then it settles."
  }
 ]

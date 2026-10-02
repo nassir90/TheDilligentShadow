@@ -1,63 +1,66 @@
 {
- "duration": 45.88,
+ "duration": 53.84,
  "lines": [
   {
-   "line": "Devlog. The cloak that wouldn't sit still.",
+   "line": "Her cloak had two problems while she sat in her chair.",
    "start": 0.0,
-   "end": 4.483
+   "end": 3.63
   },
   {
-   "line": "When the page loaded, her cloak started as a straight sheet, hanging right through her lap and the chair.",
-   "start": 4.922,
-   "end": 11.421
+   "line": "When the page loaded, the cloak started out as a flat sheet, hanging straight through her lap and the chair.",
+   "start": 4.119,
+   "end": 10.406
   },
   {
-   "line": "For a second it fought its way out, and settled into a drape she never makes.",
-   "start": 11.926,
-   "end": 16.673
+   "line": "For about a second it pushed its way out, and then it settled into a shape it never takes again.",
+   "start": 11.266,
+   "end": 18.145
   },
   {
-   "line": "Now, before the first frame, she quietly stands up and sits down, with the cloth simulated the whole way.",
-   "start": 17.478,
-   "end": 25.066
+   "line": "Now, before the first frame is drawn, she stands up and sits back down, with the cloth simulated the whole time, so it starts in a natural drape.",
+   "start": 18.343,
+   "end": 28.918
   },
   {
-   "line": "Then there was a fine buzz. Cloth on the seat crept to the edges, and slipped off, a little at a time.",
-   "start": 26.074,
-   "end": 33.987
+   "line": "After that, the cloak kept trembling slightly. The cloth resting on the seat crept towards the edges, and slipped off a little at a time.",
+   "start": 29.273,
+   "end": 38.52
   },
   {
-   "line": "The fix was friction. Cloth resting on the seat stays put, unless it's pulled harder than the seat grips.",
-   "start": 34.878,
-   "end": 41.673
+   "line": "The fix was friction. Cloth resting on the seat now stays where it is, unless something pulls it harder than the seat can hold it.",
+   "start": 38.736,
+   "end": 46.519
   },
   {
-   "line": "No pops, and the cloak moves a third as much while she sits.",
-   "start": 42.137,
-   "end": 45.632
+   "line": "The cloak no longer jumps when the page loads, and while she sits, it moves a third as much as it used to.",
+   "start": 47.082,
+   "end": 53.455
   }
  ],
  "heard": [
-  "Devlog.",
-  "The cloak that wouldn't sit still.",
-  "I'm not",
+  "Her cloak had two problems while she sat in her chair.",
   "When the page loaded,",
-  "Her cloak started as a straight sheet.",
-  "hanging right through her lap and the chair.",
-  "For a second, it fought its way out.",
-  "and settled into a drape she never makes.",
-  "Now, before the first frame,",
-  "She quietly stands up and sits down.",
-  "with the cloth simulated the whole way.",
-  "Then there was a fine buzz.",
-  "cloth on the seat.",
-  "crept to the edges.",
+  "The cloak started out as a flat sheet.",
+  "hanging straight through her lap and the chair.",
+  "For about a second, it pushed its way out.",
+  "And then it settled into a shape it never takes again.",
+  "Oh",
+  "Now,",
+  "Before the first frame is drawn,",
+  "She stands up and sits back down.",
+  "with the cloth simulated the whole time.",
+  "So,",
+  "It starts in a natural drape.",
+  "I'm sorry, I cannot fulfill this request. The audio is silent.",
+  "After that, the cloak kept trembling slightly.",
+  "The cloth resting on the seat crept towards the edges.",
   "and slipped off a little at a time.",
-  "The fix was in.",
-  "Transcribe this exactly. Reply with only the words spoken.",
-  "Cloth resting on the seat stays put.",
-  "Unless it's pulled harder than the seat grips.",
-  "No cups.",
-  "And the cloak moves a third as much while she sits."
+  "I'm sorry, I cannot fulfill that request. The audio provided is empty.",
+  "The fix was friction.",
+  "Cloth resting on the seat now stays where it is.",
+  "Unless something pulls it harder than the seat can hold it.",
+  "The cloak no longer jumps when the page loads.",
+  "And while she sits,",
+  "It moves a third as much as it used to."
  ]
 }

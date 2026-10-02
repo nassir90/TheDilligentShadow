@@ -1,26 +1,26 @@
 [
  {
-  "say": "Devlog. Her feet used to slide."
+  "say": "Her feet used to slide along the ledge while she walked."
  },
  {
-  "say": "The legs just swung on a timer, while the body glided along at a constant speed."
+  "say": "Her legs swung back and forth on a timer, while her body moved along at a constant speed, so the two never matched."
  },
  {
-  "say": "So instead of animating legs, I plant feet."
+  "say": "Now, instead of animating her legs, the walk decides where each foot is planted, and the legs follow."
  },
  {
-  "say": "The walk follows clinical gait timing. Heel strike. Foot flat. Heel off. Toe off. Then the swing."
+  "say": "The walk follows the timing of a real human step. The heel strikes the ground, the foot lies flat, the heel lifts, and the toe pushes off, before the leg swings forward."
  },
  {
-  "say": "A planted foot is a fixed point on the ledge. The hips move on, and each leg is solved to reach its foot."
+  "say": "A planted foot stays at a fixed point on the ledge. The hips keep moving, and each leg is bent so that it reaches its foot."
  },
  {
-  "say": "Turning used to spin her on the spot, and her feet skated nearly ten centimetres."
+  "say": "When she turned around, she used to spin on the spot, and her feet slid almost ten centimetres."
  },
  {
-  "say": "Now she steps round in three steps, and every foot lands where it's put."
+  "say": "Now she turns in three steps, and each foot stays where it lands."
  },
  {
-  "say": "Walking, turning, kicking, sitting down. Under a millimetre of slip."
+  "say": "Whether she is walking, turning, kicking or sitting down, her feet now slip by less than a millimetre."
  }
 ]

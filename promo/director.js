@@ -153,6 +153,8 @@
   // ---- capture loop ----
   let clockT = 1000;
   async function run({ sink, from = 0, to = TOTAL, every = 1, preview = false }) {
+    // sharper shadows for the recording: lamp map 4096 -> 16384 (the GPU's max texture), down light 2048 -> 8192 (the live exhibit keeps its own sizes)
+    scene.traverse(o => { if (o.isLight && o.castShadow && o.shadow.mapSize.x < 8192) { const n = o.shadow.mapSize.x >= 4096 ? 16384 : 8192; if (o.shadow.map) { o.shadow.map.dispose(); o.shadow.map = null; } o.shadow.mapSize.set(n, n); } });
     renderer.setPixelRatio(1); renderer.setSize(W, H, false); camera.aspect = W / H;
     controls.update = () => {}; creditFX.draw = () => {}; touched = true;
     if (typeof flyTo !== 'undefined') flyTo = null;

@@ -30,7 +30,7 @@
   // full height: a level camera on her shins, so her legs fill the top half and the ledge below takes the code
 const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.035); return { pos: V(at.x, at.y, at.z + d), at, fov }; };
 
-  const walk = (name, h, mods) => { const f = feet(); return { name, w: 1080, h, dur: 7.5, mods,
+  const walk = (name, h, mods) => { const f = feet(); return { name, w: 1080, h, dur: 10, mods,
     setup: H => { H.lights(true); H.hold(true); H.stand(STRIKE.x, -1); S.mode = 'home'; S.t = 0; },
     cam: h > 1000 ? lowCam(-0.43, 1.05) : (t, H) => H.wallCam(-0.43, 0.12, 0.66, 36),
     overlay(g, t, P, H, m) {
@@ -39,7 +39,7 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
         ann.push({ k: 'call', id: side, x: s.x, y: s.y, r: 30, dx: side === 'R' ? 150 : -150, dy: side === 'R' ? -170 : -260, text: s.state === 'sliding' ? `sliding ${mm(s.slip)} mm` : `planted ${mm(s.slip)} mm` }); }
       m.ann = ann; m.slip = f.st.maxSlip;
     } }; };
-  const turnClip = (name, h, mods) => { const f = feet(); return { name, w: 1080, h, dur: 6.5, mods,
+  const turnClip = (name, h, mods) => { const f = feet(); return { name, w: 1080, h, dur: 8, mods,
     setup: H => { H.lights(true); H.hold(true); H.stand(STRIKE.x - 0.1, 1); S.mode = 'home'; S.t = 0; },
     // follows her once she has turned and walks off, so the shot never empties
     cam: (() => { let cx = null; return (t, H) => { cx = cx == null ? STRIKE.x - 0.1 : cx + (clamp(fig.x, -0.62, STRIKE.x - 0.1) - cx) * 0.08; return h > 1000 ? lowCam(cx, 0.9)(t, H) : H.wallCam(cx, 0.12, 0.45, 36); }; })(),
@@ -66,7 +66,7 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
           }
           m.ann = ann;
         } }; })(),
-      { name: 'ik_ik', w: 1080, h: 1920, dur: 8, wireOnWall: true, wire: 0.35, wireTags: ['figure'],
+      { name: 'ik_ik', w: 1080, h: 1920, dur: 13, wireOnWall: true, wire: 0.35, wireTags: ['figure'],
         setup: H => { H.lights(true); H.hold(true); H.stand(STRIKE.x, -1); S.mode = 'giveupWalk'; S.t = 0; },
         cam: (t, H) => { const x = clamp(fig.x, -0.62, -0.25), at = H.wallPt(x, 0.0), c = H.wallPt(x, 0.08); return { pos: V(c.x, c.y, c.z + 0.85), at: V(at.x, at.y, at.z + 0.14), fov: 36 }; },
         overlay(g, t, P, H, m) {
@@ -123,35 +123,123 @@ const lowCam = (x, d = 1.0, fov = 36) => (t, H) => { const at = H.wallPt(x, 0.03
     '03-cloak-old': [
       { name: 'ic_boot_before', w: 1080, h: 1920, dur: 5, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootBefore, cam: seatedTall() },
       { name: 'ic_boot_before_half', w: 1080, h: 960, dur: 5, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootBefore, cam: seatedHalf() },
-      { name: 'ic_pops_before', w: 1080, h: 1920, dur: 11, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootBefore, cam: seatedTall(), overlay: pops() },
-      { name: 'ic_pops_before_half', w: 1080, h: 960, dur: 9, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootBefore, cam: seatedHalf(), overlay: pops() },
+      { name: 'ic_pops_before', w: 1080, h: 1920, dur: 13, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootBefore, cam: seatedTall(), overlay: pops() },
+      { name: 'ic_pops_before_half', w: 1080, h: 960, dur: 10, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootBefore, cam: seatedHalf(), overlay: pops() },
     ],
     '03-cloak': [
       { name: 'ic_boot_after_half', w: 1080, h: 960, dur: 5, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootAfter, cam: seatedHalf() },
       { name: 'ic_pops_after', w: 1080, h: 1920, dur: 12, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootAfter, cam: seatedTall(), overlay: pops() },
-      { name: 'ic_pops_after_half', w: 1080, h: 960, dur: 9, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootAfter, cam: seatedHalf(), overlay: pops() },
-      { name: 'ic_preroll', w: 1080, h: 1920, dur: 7, wire: 1, wireTags: ['cloak', 'chair', 'figure'],
+      { name: 'ic_pops_after_half', w: 1080, h: 960, dur: 10, wire: 1, solid: true, wireTags: ['cloak', 'chair'], setup: bootAfter, cam: seatedHalf(), overlay: pops() },
+      { name: 'ic_preroll', w: 1080, h: 1920, dur: 10, wire: 1, wireTags: ['cloak', 'chair', 'figure'],
         setup: H => { H.lights(true); H.hold(false); S.minSit = 999; S.wait = 999; S.mode = 'rest'; rig.upper = null; const { x, pose } = sitPose(0, POSES.sitRest); fig.x = x; fig.pose = pose; fig.face = 1; rig.yaw = Math.PI / 2; applyFigure(1 / 60); hair.lastA = cloak.lastA = null; },
         manual(t) { const u = clamp((t - 1.0) / 2.4, 0, 1); for (let i = 0; i < 2; i++) { const { x, pose } = sitPose(u, POSES.sitRest); fig.x = x; fig.pose = pose; applyFigure(1 / 60); hair.step(1 / 60); cloak.step(1 / 60); } },
         cam: fixedAt({ dx: 0.75, dy: 0.0, dz: 0.95, fov: 46, lookY: -0.1, dxAt: 0.08 }),
         overlay(g, t, P, H, m) { const [x, y] = P(H.bonePos('Hips')); m.ann = [{ k: 'call', id: 'phase', x, y, r: 40, dx: 230, dy: -300, text: t < 1 ? 'stand, let it hang' : t < 3.4 ? 'sit down' : 'settle' }]; } },
     ],
     '04-hair': [
-      { name: 'ih_wire', w: 1080, h: 1920, dur: 14, prerun: 3, hide: ['cloak'], solid: t => wave(t, 4) < 0.5, wire: t => 0.35 + 0.65 * wave(t, 4), wireTags: ['hair', 'figure'], setup: H => { H.lights(true); H.hold(true); H.stand(FRONT_X, 1); S.mode = 'approach'; S.t = 0; S.patience = 99; }, cam: hairTall },
+      { name: 'ih_wire', w: 1080, h: 1920, dur: 16, prerun: 3, hide: ['cloak'], solid: t => wave(t, 4) < 0.5, wire: t => 0.35 + 0.65 * wave(t, 4), wireTags: ['hair', 'figure'], setup: H => { H.lights(true); H.hold(true); H.stand(FRONT_X, 1); S.mode = 'approach'; S.t = 0; S.patience = 99; }, cam: hairTall },
       ...[['before', ['rawCloth']], ['after', []]].flatMap(([k, mods]) => [
         { name: `ih_${k}`, w: 1080, h: 960, dur: 9, prerun: 3, hide: ['cloak'], solid: true, mods, dtAt: noisy(), wire: 1, wireTags: ['hair'], setup: standStill, cam: hairHalf },
-        { name: `ih_${k}_tall`, w: 1080, h: 1920, dur: 20, prerun: 3, hide: ['cloak'], solid: true, mods, dtAt: noisy(), wire: 1, wireTags: ['hair'], setup: standStill, cam: hairTall },
+        { name: `ih_${k}_tall`, w: 1080, h: 1920, dur: 23, prerun: 3, hide: ['cloak'], solid: true, mods, dtAt: noisy(), wire: 1, wireTags: ['hair'], setup: standStill, cam: hairTall },
       ]),
     ],
     '05-hand': [
-      { name: 'iha_wire', w: 1080, h: 1920, dur: 10, wire: t => wave(t, 3.5), wireTags: ['hand'], setup: seatedQuiet, handPath: t => lissajous(t, 0.6), cam: () => plinthTall() },
-      { name: 'iha_springs', w: 1080, h: 1920, dur: 14, setup: seatedQuiet, handPath: t => lissajous(t, 1.9), cam: () => plinthTall(0.5),
+      { name: 'iha_wire', w: 1080, h: 1920, dur: 15, wire: t => wave(t, 3.5), wireTags: ['hand'], setup: seatedQuiet, handPath: t => lissajous(t, 0.6), cam: () => plinthTall() },
+      { name: 'iha_springs', w: 1080, h: 1920, dur: 18, setup: seatedQuiet, handPath: t => lissajous(t, 1.9), cam: () => plinthTall(0.5),
         overlay(g, t, P, H, m) { const [x, y] = P(hand.target); m.ann = [{ k: 'call', id: 'target', x, y, r: 30, dx: -230, dy: -200, text: 'where it’s sent' }]; } },
       { name: 'iha_dent', w: 1080, h: 1920, dur: 9, setup: heldKicks,
         cam: t => { const tip = leverTipWorld(V()); return { pos: tip.clone().add(V(-0.14 + 0.012 * t / 8, 0.05, 0.19)), at: tip.clone().add(V(0.01, -0.025, 0)), fov: 42 }; } },
       { name: 'iha_fade', w: 1080, h: 1920, dur: 8, setup: seatedQuiet, handPath: t => lissajous(t, 0.5),
         cam: () => ({ pos: V(SW.x - 0.34, PLINTH.h + 0.17, SW.z + 0.32), at: V(SW.x + 0.04, PLINTH.h + 0.0, SW.z), fov: 50 }),
         overlay(g, t, P, H, m) { if (hand.alpha < 0.5) { m.ann = []; return; } const [x, y] = P(hand.bones.wrist.getWorldPosition(V())); m.ann = [{ k: 'call', id: 'wrist', x, y, r: 36, dx: 200, dy: -230, text: 'fades out' }]; } },
+    ],
+  });
+
+  // ---- shared bits for the invisible cast, rigging, smoothing and state machine videos ----
+  const ease = k => k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k);
+  const xy = p => p.slice(0, 2);
+  const inFrame = (p, w, h, m = 40) => p[2] < 1 && p[0] > m && p[0] < w - m && p[1] > m && p[1] < h - m;
+  const approach = H => { H.lights(true); H.hold(true); H.stand(FRONT_X, 1); S.mode = 'approach'; S.t = 0; S.patience = 99; };
+  const BONES = [['Hips', 'Abdomen'], ['Abdomen', 'Torso'], ['Torso', 'Chest'], ['Chest', 'Neck'], ['Neck', 'Head'], ['Head', 'Head_end'],
+    ...['L', 'R'].flatMap(s => [['Chest', `Shoulder.${s}`], [`Shoulder.${s}`, `UpperArm.${s}`], [`UpperArm.${s}`, `LowerArm.${s}`], [`LowerArm.${s}`, `Wrist.${s}`],
+      ['Hips', `UpperLeg.${s}`], [`UpperLeg.${s}`, `LowerLeg.${s}`], [`LowerLeg.${s}`, `LowerLeg.${s}_end`], [`LowerLeg.${s}_end`, `Foot.${s}`]])];
+  const skeleton = (P, H) => { const ann = [], seen = new Set();
+    for (const [a, b] of BONES) { if (!bn(a) || !bn(b)) continue; ann.push({ k: 'line', w: 4, pts: [xy(P(H.bonePos(a))), xy(P(H.bonePos(b)))] });
+      for (const n of [a, b]) if (!seen.has(n)) { seen.add(n); const [x, y] = P(H.bonePos(n)); ann.push({ k: 'dot', x, y, r: 7 }); } }
+    return ann; };
+  const SPINE = ['Hips', 'Abdomen', 'Torso', 'Chest', 'Neck', 'Head', 'Head_end'];
+  const spine = (P, H) => { const pts = SPINE.map(n => xy(P(H.onWall(H.bonePos(n))))); return [{ k: 'line', w: 5, pts }, ...pts.map(([x, y]) => ({ k: 'dot', x, y, r: 8 }))]; };
+  const trail = () => { const tr = []; return (P, H) => { tr.push(H.onWall(H.bonePos('Head'))); if (tr.length > 24) tr.shift(); const pts = tr.map(p => xy(P(p))), [x, y] = pts[pts.length - 1]; return [{ k: 'line', w: 5, pts }, { k: 'dot', x, y, r: 9 }]; }; };
+  const kickCam = (fov = 36) => (t, H) => H.wallCam(STRIKE.x + 0.03, 0.24, 0.85, fov);
+  const leanMeta = m => { m.raw = fig.pose.lean; m.smooth = rig.upper ? rig.upper.lean.x : fig.pose.lean; };
+  const castCall = (P, H, w, h) => {   // her body, hair, cloak and the chair, in 3D
+    const ann = [], add = (id, v, dx, dy, text) => { const p = P(v); if (inFrame(p, w, h)) ann.push({ k: 'call', id, x: p[0], y: p[1], r: 34, dx, dy, text }); };
+    const c = cloak.pts, i = 3 * Math.floor(c.length / 6);
+    add('hair', H.bonePos('Head_end'), -210, -170, 'her hair');
+    add('body', H.bonePos('Chest'), 230, -120, 'her body');
+    add('cloak', stageG.localToWorld(V(c[i], c[i + 1], c[i + 2])), -230, 120, 'her cloak');
+    if (typeof chair !== 'undefined' && chair) add('chair', chair.getWorldPosition(V()), 220, 160, 'the chair');
+    return ann;
+  };
+
+  Object.assign(window.CLIPS_INK, {
+    '06-shadows': [
+      { name: 'ish_room', w: 1080, h: 1920, dur: 16, setup: approach,
+        cam: t => ({ pos: V(0.1, 1.85, 6.2 - 0.6 * ease(t / 16)), at: V(0, 1.75, -1), fov: 46 }),
+        overlay(g, t, P, H, m) { const ann = [], L = P(H.lampPos()), s = P(H.onWall(H.bonePos('Chest')));
+          if (inFrame(L, 1080, 1920)) ann.push({ k: 'call', id: 'lamp', x: L[0], y: L[1], r: 34, dx: -200, dy: -200, text: 'the lamp' });
+          if (inFrame(s, 1080, 1920)) ann.push({ k: 'call', id: 'shadow', x: s[0], y: s[1], r: 40, dx: 200, dy: 240, text: 'her shadow' });
+          m.ann = ann; } },
+      { name: 'ish_reveal', w: 1080, h: 1920, dur: 22, wire: t => wave(t, 4), wireTags: ['figure', 'cloak', 'hair', 'chair'], setup: approach,
+        cam: t => ({ pos: V(-0.1 + 0.25 * Math.sin(t * 0.25), 1.8, -3.86 + 1.55), at: V(-0.45, 1.74, -3.92), fov: 38 }),
+        overlay(g, t, P, H, m) { m.ann = castCall(P, H, 1080, 1920); } },
+      { name: 'ish_orbit', w: 1080, h: 1920, dur: 12, solid: t => Math.sin(t * 0.7) > 0, wire: t => 1 - 0.5 * wave(t, 4.5), wireTags: ['figure', 'cloak', 'hair', 'chair'],
+        setup: H => { H.lights(true); H.hold(true); H.seat('headInHands', 'sulk'); S.minSit = 999; S.wait = 999; S.fakeIn = 999; },
+        cam: t => { const c = V(-0.76, 1.72, -3.88), a = -1.15 + 0.9 * t / 12; return { pos: c.clone().add(V(Math.sin(a) * 0.9, 0.12, Math.cos(a) * 0.9)), at: c, fov: 40 }; },
+        // the ray from the lamp, through her head, to its shadow on the wall
+        overlay(g, t, P, H, m) { const L = H.lampPos(), head = H.bonePos('Head'), sh = H.onWall(head), dir = head.clone().sub(L).normalize();
+          const a = P(head.clone().addScaledVector(dir, -0.6)), b = P(sh);
+          m.ann = [{ k: 'line', w: 3, dash: [14, 10], pts: [xy(a), xy(b)] }, { k: 'call', id: 'light', x: a[0], y: a[1], r: 26, dx: 160, dy: -170, text: 'light from the lamp' },
+            { k: 'call', id: 'shadow', x: b[0], y: b[1], r: 30, dx: -170, dy: 190, text: 'shadow' }]; } },
+      { name: 'ish_credit', w: 1080, h: 1920, dur: 14, credit: true, setup: seatedQuiet,
+        cam: t => ({ pos: V(SW.x, 1.2, 1.22), at: V(SW.x, 1.16 - 0.3 * ease(t / 14), -4), fov: 62 }) },
+    ],
+    '07-rig': [
+      { name: 'irig_skel', w: 1080, h: 1920, dur: 50, wire: t => 0.15 + 0.6 * wave(t, 4), wireTags: ['figure'], solid: t => wave(t, 4) < 0.5, setup: approach,
+        cam: (t, H) => { const c = H.wallPt(clamp(fig.x, -0.6, -0.25), 0.25); return { pos: c.clone().add(V(0.35, 0.02, 1.25)), at: c.clone().add(V(0, -0.1, 0.14)), fov: 48 }; },
+        overlay(g, t, P, H, m) { m.ann = skeleton(P, H); } },
+      { name: 'irig_fingers', w: 1080, h: 1920, dur: 22, solid: true, clayColor: 0x5a4438, wire: t => 0.6 * wave(t, 3.5), wireTags: ['figure'],
+        setup: H => { H.lights(true); H.hold(false); H.stand(-0.45, 1); S.mode = 'stare'; S.t = 0; S.dur = 99; REC._grip = gripFor; gripFor = () => [0.5 - 0.5 * Math.cos(REC.t * 1.4), 0.3]; },
+        after: () => { gripFor = REC._grip; },
+        cam: (t, H) => { const w = H.bonePos('Wrist.R'), mid = H.bonePos('Middle2.R'), c = w.clone().lerp(mid, 0.5); return { pos: c.clone().add(V(0.02, 0.03, 0.17)), at: c.clone().add(V(0, -0.02, 0)), fov: 40 }; },
+        overlay(g, t, P, H, m) { const [x, y] = P(H.bonePos('Middle2.R')); m.grip = 0.5 - 0.5 * Math.cos(t * 1.4); m.ann = [{ k: 'call', id: 'grip', x, y, r: 40, dx: 230, dy: -260, text: `grip ${m.grip.toFixed(2)}` }]; } },
+    ],
+    '08-smoothing': [
+      ...[['before', ['noSmooth', 'noWobble']], ['after', []]].map(([k, mods]) => { const tr = trail(); return { name: `ism_${k}`, w: 1080, h: 960, dur: 9, mods, setup: heldKicks, cam: kickCam(),
+        overlay(g, t, P, H, m) { m.ann = tr(P, H); leanMeta(m); } }; }),
+      (() => { const tr = trail(); return { name: 'ism_kick_tall', w: 1080, h: 1920, dur: 22, setup: heldKicks, cam: kickCam(58),
+        overlay(g, t, P, H, m) { m.ann = tr(P, H); leanMeta(m); } }; })(),
+      ...[['before', ['noWobble']], ['after', []]].map(([k, mods]) => ({ name: `ism_spine_${k}`, w: 1080, h: 960, dur: 11, mods, setup: approach, cam: (t, H) => H.wallCam(-0.42, 0.22, 1.05, 36),
+        overlay(g, t, P, H, m) { m.ann = spine(P, H); } })),
+      { name: 'ism_sit', w: 1080, h: 1920, dur: 16, setup: H => { H.lights(true); H.hold(true); H.stand(FRONT_X + 0.25, -1); S.mode = 'home'; S.t = 0; S.minSit = 999; S.wait = 999; },
+        cam: (t, H) => H.wallCam(SIT_X + 0.12, 0.2, 1.0, 38), overlay(g, t, P, H, m) { m.ann = spine(P, H); } },
+    ],
+    '09-brain': [
+      { name: 'ibrain_run', w: 1080, h: 1920, dur: 80,
+        setup: H => { H.lights(false); H.hold(false); H.seat(); S.minSit = 0; S.t = 99; S.wait = null; REC._b = { pushed: false, faked: false, stage: 0 }; },
+        update(t, H) {
+          const b = REC._b;
+          if (b.stage === 0 && t > 0.6) { setOn(true, 'key'); S.wait = 0.8; b.stage = 1; }
+          if (b.stage === 1 && S.mode === 'home' && t > 8) { setOn(true, 'key'); H.hold(true); S.patience = 4; b.stage = 2; }
+          if (b.stage === 2 && S.mode === 'kick' && S.fails === 1 && !b.pushed && S.t > KICK.dur * 0.97) { S.mode = 'push'; S.t = -0.2; S.dur = 2.4; S.hit = false; b.pushed = true; }
+          if (b.stage === 2 && S.mode === 'sulk' && S.t > 3.0 && !b.faked) { startRise('fakeRun', 0.45); b.faked = true; b.stage = 3; }
+          if (b.stage === 3 && S.mode !== 'fakeRun' && S.mode !== 'stare' && S.mode !== 'sitting') { H.hold(false); setOn(false, 'key'); tilt = SW.maxTilt; b.stage = 4; b.t4 = t; }
+          // flip it back and forth while she walks (each flip turns her round): three flips, and she loses her temper
+          if (b.stage === 4 && S.mode === 'home' && walker && fig.x < STRIKE.x - 0.12) { b.stage = 5; b.flips = 0; b.last = t; }
+          if (b.stage === 5 && b.flips < 3 && t - b.last > 0.8 && (S.mode === 'home' || S.mode === 'approach')) { setOn(!on, 'key'); tilt = on ? -SW.maxTilt : SW.maxTilt; b.flips++; b.last = t; }
+        },
+        // her and the switch in the lower half; the wall above takes the diagram
+        cam: (t, H) => { const c = H.closeCam(0.4); return { pos: c.pos, at: c.at.clone().add(V(0, 0.33, 0)), fov: 46 }; } },
     ],
   });
 })();

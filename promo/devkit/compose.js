@@ -100,7 +100,7 @@ function drawAnn(list, map, key = '', t = 0) {
   for (const a of list || []) {
     ig.globalAlpha = a.o ?? 1;
     if (a.k === 'dot') { const [x, y] = map(a.x, a.y); ig.beginPath(); ig.arc(x, y, (a.r || 7) * 0.8, 0, 7); a.fill === false ? ig.stroke() : ig.fill(); }
-    else if (a.k === 'line') { ig.lineWidth = a.w || 3; ig.beginPath(); a.pts.forEach((p, i) => { const [x, y] = map(...p); i ? ig.lineTo(x, y) : ig.moveTo(x, y); }); ig.stroke(); ig.lineWidth = 3; }
+    else if (a.k === 'line') { ig.lineWidth = a.w || 3; ig.setLineDash(a.dash || []); ig.beginPath(); a.pts.forEach((p, i) => { const [x, y] = map(...p); i ? ig.lineTo(x, y) : ig.moveTo(x, y); }); ig.stroke(); ig.lineWidth = 3; ig.setLineDash([]); }
     else if (a.k === 'call') calls.push(a);
   }
   ig.restore();
@@ -379,6 +379,36 @@ function graph(g, L, tl) {
   g.restore();
 }
 
+// ---- (ink) the state machine diagram: Times New Roman state names inked into the mask, thin lines between them that
+// stop short of the names; the state she is in is a block with its name cut out, and the transition she just took is
+// drawn heavier ----
+function inkDiagram(L, mode) {
+  const { x = 0, y = 200, nodes, edges, size = 38 } = L, pos = Object.fromEntries(nodes.map(n => [n.id, n]));
+  ig.save(); ig.translate(x, y); ig.font = `400 ${size}px ${SERIF}`;
+  const box = {}; for (const n of nodes) { const w = ig.measureText(n.label || n.id).width; box[n.id] = { hw: w / 2 + size * 0.5, hh: size * 0.85 }; }
+  const outside = (px, py, n) => Math.abs(px - pos[n].x) > box[n].hw || Math.abs(py - pos[n].y) > box[n].hh;
+  ig.strokeStyle = '#fff'; ig.fillStyle = '#fff'; ig.lineCap = 'round';
+  for (const [a, b, bend = 0] of edges) {
+    const A = pos[a], B = pos[b], mx = (A.x + B.x) / 2 + bend * (B.y - A.y) * 0.3, my = (A.y + B.y) / 2 - bend * (B.x - A.x) * 0.3;
+    const q = t => [(1 - t) * (1 - t) * A.x + 2 * (1 - t) * t * mx + t * t * B.x, (1 - t) * (1 - t) * A.y + 2 * (1 - t) * t * my + t * t * B.y];
+    const pts = []; for (let i = 0; i <= 60; i++) { const p = q(i / 60); if (outside(...p, a) && outside(...p, b)) pts.push(p); }
+    if (pts.length < 3) continue;
+    const live = a === L._prev && (b === mode || (pos[b].also || []).includes(mode));
+    ig.globalAlpha = live ? 1 : 0.6; ig.lineWidth = live ? 5 : 2;
+    ig.beginPath(); pts.forEach(([px, py], i) => i ? ig.lineTo(px, py) : ig.moveTo(px, py)); ig.stroke();
+    const [ex, ey] = pts[pts.length - 1], [fx, fy] = pts[pts.length - 3], ang = Math.atan2(ey - fy, ex - fx), r = live ? 16 : 12;   // a small head at the end it goes to
+    ig.beginPath(); ig.moveTo(ex, ey); ig.lineTo(ex - Math.cos(ang - 0.45) * r, ey - Math.sin(ang - 0.45) * r); ig.lineTo(ex - Math.cos(ang + 0.45) * r, ey - Math.sin(ang + 0.45) * r); ig.fill();
+  }
+  ig.globalAlpha = 1; ig.textAlign = 'center'; ig.textBaseline = 'middle';
+  for (const n of nodes) {
+    const act = n.id === mode || (n.also || []).includes(mode), text = n.label || n.id, b = box[n.id];
+    if (act) { ig.fillRect(n.x - b.hw, n.y - b.hh * 0.8, b.hw * 2, b.hh * 1.6); ig.globalCompositeOperation = 'destination-out'; ig.fillText(text, n.x, n.y + 2); ig.globalCompositeOperation = 'source-over'; }
+    else ig.fillText(text, n.x, n.y + 2);
+    BOXES.push({ group: 'diagram#' + n.id, x0: x + n.x - b.hw + size * 0.5, x1: x + n.x + b.hw - size * 0.5, y0: y + n.y - size * 0.5, y1: y + n.y + size * 0.5, size, text });
+  }
+  ig.restore();
+}
+
 // ---- the state machine diagram, lit by what she is doing in a clip ----
 function diagram(g, L, tl, mode) {
   const { x = 0, y = 120, nodes, edges } = L;
@@ -482,11 +512,11 @@ function timeline(E, vo) {
   return { segs, cues, total: t };
 }
 
-let STYLE = 'classic', NOW = 0, WORDS = null;
+let STYLE = 'classic', NOW = 0, WORDS = null; const LASTMETA = {};
 async function drawClipLayer(g, L, tl, rect) {
   const ct = L._from + tl * (L.speed || 1), len = clips[L.clip].meta.frames.length / clips[L.clip].meta.fps;
   if (ct > len + 1 / 30) { const o = (STATUS.overrun ||= {}); o[L.clip] = Math.max(o[L.clip] || 0, +(ct - len).toFixed(2)); }   // the clip has run out: it would freeze
-  const { img, meta } = await clipFrame(L.clip, ct);
+  const { img, meta } = await clipFrame(L.clip, ct); LASTMETA[L.clip] = meta;
   const [x, y, w, h] = rect || L.rect || [0, 0, W, H];
   g.save(); if (L.alpha != null) g.globalAlpha = L.alpha;
   const map = cover(g, img, x, y, w, h, L.fx ?? 0.5, L.fy ?? 0.5); g.restore();
@@ -532,7 +562,7 @@ async function run(id, opts = {}) {
       else if (L.type === 'diagram') {
         const { meta } = await clipFrame(L.modeClip, (L.modeFrom ?? 0) + tl * (L.speed || 1));
         if (meta.mode !== lastMode) { prevMode = lastMode; lastMode = meta.mode; }
-        L._prev = prevMode; diagram(g, L, tl, meta.mode);
+        L._prev = prevMode; if (STYLE === 'ink') inkDiagram(L, meta.mode); else diagram(g, L, tl, meta.mode);
       }
       else if (L.type === 'draw') L.fn(g, tl, { W, H, C, SANS, MONO, SERIF, ease, clips });
     }
@@ -542,7 +572,9 @@ async function run(id, opts = {}) {
       applyInk(g);
       const subs = TL.cues.filter(c => c.text && c.at < s.t0 + s.dur && c.at + (c.b - c.a) + 0.45 > s.t0);
       const bottom = (subs.length ? Math.min(...subs.map(c => subTop(c.text))) : H - 60) - 48;   // just clear of the subtitles
-      for (const L of s.layers || []) { for (const r of [L, L.a, L.b]) if (r && r._cut) { cutLabel(g, ...r._cut); r._cut = null; } if (L._code) plainCode(g, L, tl, bottom); if (L._graph) plainGraph(g, L, tl, bottom); }
+      for (const L of s.layers || []) { for (const r of [L, L.a, L.b]) if (r && r._cut) { cutLabel(g, ...r._cut); r._cut = null; } if (L._code) plainCode(g, L, tl, bottom); if (L._graph) plainGraph(g, L, tl, bottom);
+        // a live readout of numbers from the clip's data, in the code box style
+        if (L.type === 'readout') { const m = LASTMETA[L.clip] || {}; plainCode(g, { ...L, typing: false, text: L.rows.map(([k, f]) => k.padEnd(L.pad || 13) + (typeof f === 'function' ? f(m) : (m.pose[f] >= 0 ? ' ' : '') + m.pose[f].toFixed(3))).join('\n') }, tl, bottom); } }
       crowding(t);
     } else {
       header(g, E);

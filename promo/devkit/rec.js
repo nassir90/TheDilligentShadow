@@ -123,9 +123,16 @@
   let handPath = null;
   aimHand = function () { if (handPath && !dragging) { const p = handPath(); if (p) { hand.target.copy(p); hand.want = 1; } else hand.want = 0; } else origAim(); };
 
+  // ---- sharper shadows for recordings (the live exhibit keeps its own sizes): lamp map 4096 -> 16384 (the GPU's max texture), down light 2048 -> 8192 ----
+  function hiShadows() {
+    if (REC._hi) return; REC._hi = true;
+    scene.traverse(o => { if (o.isLight && o.castShadow) { const n = o.shadow.mapSize.x >= 4096 ? 16384 : 8192; if (o.shadow.map) { o.shadow.map.dispose(); o.shadow.map = null; } o.shadow.mapSize.set(n, n); } });
+  }
+
   // ---- record one clip ----
   async function clip(o) {
     const W = o.w || 1080, Hh = o.h || 1920, fps = o.fps || 30, n = Math.round(o.dur * fps);
+    hiShadows();
     renderer.setPixelRatio(1); renderer.setSize(W, Hh, false); camera.aspect = W / Hh; renderer.render = () => {};
     controls.update = () => {}; creditFX.draw = () => {}; touched = true; flyTo = null;
     let seed = o.seed || 11; Math.random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -164,6 +171,7 @@
     if (batch.length) await fetch(`${SINK}/batch`, { method: 'POST', body: batch.join('\n') });
     await fetch(`${SINK}/clips/${o.name}/meta.json`, { method: 'POST', body: JSON.stringify({ fps, w: W, h: Hh, frames: meta }) });
     mods([]); solid(false); handPath = null; renderer.render = draw; hidden.forEach(m => m.visible = true);
+    o.after?.(H_);
     REC.status.done = true;
   }
   // run a list of clip definitions one after another (in the background); poll REC.status / REC.queue

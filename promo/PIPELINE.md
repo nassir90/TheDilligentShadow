@@ -15,20 +15,20 @@ Hand-off notes for the promo and devlog videos, so the work doesn't depend on an
 
 ## Status
 
+Final re-render done (all clips recorded against the current exhibit: ponytail tube, flush feet).
+
 | Video | Style | Notes |
 |---|---|---|
-| 01 promo | original (director.js) | re-render against the current exhibit in the final pass |
-| 02 Planted feet | **ink** | done; script still opens with "Devlog." |
-| 03 The cloak that wouldn't sit still | **ink** | done; script still opens with "Devlog."; "before" shots need the old build (see below) |
-| 04 Her hair is cloth | **ink** | done; script rewritten in plain sentences (the model for the rest) |
-| 05 The visitor's hand | **ink** | done; script still opens with "How it works:" |
-| 06 The invisible cast, 07 Rigging her, 08 Smoothing her out, 09 Her brain is a state machine | classic | not yet restyled (their clips have labels baked in: they need ink clip versions with annotation data) |
-| 10 The Visitor, 11 The Shadow | cinematic | done; procedural score. The Visitor's take was mis-aligned ("Someone." of the last line plays at the end of the line before): run align.py on it in the final pass |
+| 01 promo | original (director.js) | |
+| 02 Planted feet, 03 The cloak, 04 Her hair is cloth, 05 The visitor's hand | **ink** | scripts in plain sentences |
+| 06 The invisible cast, 07 Rigging her, 08 Smoothing her out, 09 Her brain is a state machine | **ink** | restyled; `edl.classic.js` keeps the old version |
+| 10 The Visitor, 11 The Shadow | cinematic | procedural score; The Visitor re-aligned with align.py |
 
-**Next: the final re-render of everything.** Before it:
-- Rewrite every script in plain, complete sentences (see the hair script): no spoken "Devlog." / "How it works:" openers, no punchy fragments, accurate words for what's on screen, no disclaimers.
-- Restyle 06–09 in the ink style.
-- Re-record all clips against the current exhibit (foot fix `ee64692` and later).
+Scripts: plain, complete sentences; no spoken "Devlog." / "How it works:" openers (titles are on screen only), no punchy fragments,
+accurate words for what's on screen, no disclaimers. `script.prev.json` keeps each previous script.
+
+Recordings use sharper shadows than the live exhibit: rec.js and director.js raise the lamp's shadow map from 4096 to
+16384 (the GPU's maximum texture size) and the down light's from 2048 to 8192 (about 68 ms a frame instead of 11).
 
 ## Ink style (agreed)
 
@@ -38,6 +38,8 @@ Hand-off notes for the promo and devlog videos, so the work doesn't depend on an
 - Code: translucent black box, white **Menlo** (no line numbers), placed just above the subtitles.
 - Graphs: same black box; white lines, solid for before, dashed for after.
 - Callouts: a small circle on the feature; a leader that runs on to underline a Times New Roman label. No arrowheads. Labels stay put and glide only when the feature moves far, and they fade in and out.
+- State diagram (09): Times New Roman state names on the wall, thin lines between them; the current state is a block with its name cut out, the transition just taken is heavier.
+- Readouts (07): live numbers from a clip's data, in the code box style (`type: 'readout'`).
 - Checks run on every compose: text crowding (`STATUS.crowd`, must be 0) and clip overruns (`STATUS.overrun`, must be empty, otherwise lengthen the clip).
 
 ## Rebuild steps
@@ -57,10 +59,12 @@ node devkit/cdp.mjs open "http://localhost:8780/games/thedilligentshadow/?h=1"
 node devkit/cdp.mjs eval -e "window.INK=true; window.GROUPS='<id>'; window.NAMES=''; return 1"
 node devkit/cdp.mjs eval devkit/run_named.js
 # compose and build
-node devkit/cdp.mjs open "http://127.0.0.1:8781/devkit/compose.html"
-node devkit/cdp.mjs eval -e "await COMPOSE.run('<id>'); return JSON.stringify({crowd: STATUS.crowd, overrun: STATUS.overrun})"
+TAB=compose node devkit/cdp.mjs open "http://127.0.0.1:8781/devkit/compose.html"   # its own tab: can run during a recording
+TAB=compose node devkit/cdp.mjs eval -e "await COMPOSE.run('<id>'); return JSON.stringify({crowd: STATUS.crowd, overrun: STATUS.overrun})"
 python3 devkit/build.py <id> out/<id>.mp4
 ```
+
+The compose page caches clip data: reload it after re-recording a clip. The promo: open the exhibit, eval `director.js`, `await PROMO.run({ sink: 'http://127.0.0.1:8781' })`, then `python3 make_video.py` and copy `promo.mp4` to `out/01-promo.mp4`.
 
 The exhibit itself is served by the `site` preview (`python3 -m http.server 8780 --directory public`).
 

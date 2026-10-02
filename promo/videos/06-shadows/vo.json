@@ -1,52 +1,52 @@
 {
- "duration": 35.92,
+ "duration": 39.4,
  "lines": [
   {
-   "line": "How it works: the invisible cast.",
+   "line": "This exhibit is made of shadows cast by objects you never see.",
    "start": 0.0,
-   "end": 3.316
+   "end": 4.448
   },
   {
-   "line": "Everything on the wall is a real shadow, cast by one lamp.",
-   "start": 4.114,
-   "end": 8.156
+   "line": "Everything on the wall is a real shadow, cast by a single lamp.",
+   "start": 5.327,
+   "end": 9.564
   },
   {
-   "line": "Her body, her hair, her cloak, and the chair, are all real 3D objects.",
-   "start": 8.859,
-   "end": 14.726
+   "line": "Her body, her hair, her cloak and the chair are all real 3D objects.",
+   "start": 10.284,
+   "end": 16.125
   },
   {
-   "line": "But they write no colour and no depth. You never see them. They only cast shadows.",
-   "start": 15.458,
-   "end": 21.473
+   "line": "But they are never drawn. They write no colour and no depth, so the only thing they do is cast shadows.",
+   "start": 16.494,
+   "end": 23.233
   },
   {
-   "line": "They stand between the lamp and the wall, scaled toward the light, so the shadows land at just the right size.",
-   "start": 22.289,
-   "end": 29.078
+   "line": "They stand between the lamp and the wall, and they are scaled toward the light, so that their shadows land at exactly the right size.",
+   "start": 24.184,
+   "end": 31.625
   },
   {
-   "line": "Even the credit line is a shader. Each letter is inked black or white, by whatever is behind it.",
-   "start": 29.866,
-   "end": 35.582
+   "line": "Even the credit line is a shader. Each letter is drawn in black or white, depending on what is behind it.",
+   "start": 32.506,
+   "end": 39.005
   }
  ],
  "heard": [
-  "How it works.",
-  "The Invisible Cast",
+  "This exhibit is made of shadows, cast by objects you never see.",
   "Everything on the wall is a real shadow.",
-  "cast by one lamp.",
-  "Her body, her hair, her cloak,",
-  "And the chair.",
-  "Are all real 3D objects?",
-  "But they write no color and no depth.",
-  "You never see them.",
-  "They only cast shadows.",
+  "cast by a single lamp.",
+  "Her body",
+  "Her hair",
+  "her cloak and the chair are all real 3D objects.",
+  "But they are never drawn.",
+  "They write no color and no depth.",
+  "So the only thing they do is cast shadows.",
   "They stand between the lamp and the wall.",
-  "scaled toward the light.",
-  "So the shadows land at just the right size.",
+  "and they are scaled toward the light.",
+  "so that their shadows land at exactly the right size.",
   "Even the credit line is a shader.",
-  "Each letter is inked black or white by whatever is behind it."
+  "Each letter is drawn in black or white.",
+  "depending on what is behind it."
  ]
 }

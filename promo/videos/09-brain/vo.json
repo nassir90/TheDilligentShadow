@@ -1,63 +1,67 @@
 {
- "duration": 36.76,
+ "duration": 47.36,
  "lines": [
   {
-   "line": "Devlog. Her brain is a state machine.",
+   "line": "Her behaviour is controlled by a state machine.",
    "start": 0.0,
-   "end": 3.108
+   "end": 3.164
   },
   {
-   "line": "She rests. When the light comes on, she notices, walks over, and kicks it off.",
-   "start": 3.393,
-   "end": 9.419
+   "line": "She rests in her chair. When the light comes on, she notices it, walks over, and kicks the switch off.",
+   "start": 3.908,
+   "end": 11.3
   },
   {
-   "line": "Hold the switch, and her kicks fail. After a few, she might lean on it instead.",
-   "start": 10.202,
-   "end": 16.965
+   "line": "If you hold the switch on, her kicks fail. After a few failures, she might lean on the switch instead.",
+   "start": 12.333,
+   "end": 19.693
   },
   {
-   "line": "Fail enough, and she gives up, sulks, and ignores you.",
-   "start": 17.2,
-   "end": 20.535
+   "line": "If she fails enough times, she gives up, sulks, and ignores you.",
+   "start": 20.636,
+   "end": 25.203
   },
   {
-   "line": "Keep holding it, and now and then she'll dash at it, just to see.",
-   "start": 20.732,
-   "end": 24.386
+   "line": "If you keep holding it, every now and then she runs at the switch, just to check.",
+   "start": 26.058,
+   "end": 30.769
   },
   {
-   "line": "Turn the light off, and she walks home in the dark. Flip it back and forth, and she loses her temper.",
-   "start": 25.181,
-   "end": 31.095
+   "line": "If you turn the light off, she walks back to her chair in the dark. If you flip the switch on and off quickly while she walks, she loses her temper and stomps.",
+   "start": 31.678,
+   "end": 40.765
   },
   {
-   "line": "No machine learning. Just states, timers, and a little chance.",
-   "start": 31.748,
-   "end": 36.461
+   "line": "There is no machine learning involved, only states, timers, and a little randomness.",
+   "start": 41.569,
+   "end": 47.02
   }
  ],
  "heard": [
-  "Devlog.",
-  "Her brain is a stained machine.",
-  "She rests.",
-  "When the light comes on, she notices,",
+  "Her behavior is controlled by a state machine.",
+  "She rests in her chair?",
+  "When the light comes on,",
+  "She notices it.",
   "Walks over.",
-  "and kicks it off.",
-  "Hold the switch.",
-  "and her kicks fail.",
-  "After a few, she might lean on it instead.",
-  "Fallen off",
-  "And she gives up.",
-  "sulks and ignore you.",
-  "I",
-  "keep holding it and now and then she'll dash at it.",
-  "Just to see.",
-  "Turn the light off and she walks home in the dark.",
-  "flip it back and forth and she loses her temper.",
-  "No machine learning.",
-  "Just states.",
-  "Timers",
-  "And a little chance."
+  "and kicks the switch off.",
+  "If you hold the switch on,",
+  "Her kicks fail.",
+  "After a few failures, she might lean on the switch instead.",
+  "If she fails enough times,",
+  "She gives up.",
+  "socks",
+  "and ignores you.",
+  "If you keep holding it,",
+  "Every now and then, she runs at the switch.",
+  "Just to check.",
+  "If you turn the light off,",
+  "She walks back to her chair in the dark.",
+  "If you flip the switch on and off quickly while she walks,",
+  "She loses her temper.",
+  "and stumps.",
+  "There is no machine learning involved.",
+  "Only states.",
+  "timers",
+  "And a little randomness."
  ]
 }

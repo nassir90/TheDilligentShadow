@@ -1,20 +1,20 @@
 [
  {
-  "say": "How it works: the visitor's hand."
+  "say": "The hand that presses the switch belongs to you, the visitor."
  },
  {
-  "say": "It's a skinned hand model from the WebXR input profiles, with a bone for every knuckle."
+  "say": "It is a skinned hand model from the WebXR input profiles, with a bone for every knuckle."
  },
  {
-  "say": "The fingertip goes exactly where it's sent. Everything else hangs off it, on springs."
+  "say": "The fingertip goes exactly where it is sent, and the rest of the hand hangs off it on springs."
  },
  {
-  "say": "Speed and acceleration tilt and twist the hand, and flick the other fingers, before they settle."
+  "say": "When the hand speeds up or slows down, it tilts and twists, and the other fingers swing before they settle."
  },
  {
-  "say": "On the switch, the finger flexes as she leans on it, and dents with every kick."
+  "say": "On the switch, the finger bends as she leans against it, and it jolts briefly each time she kicks."
  },
  {
-  "say": "And it fades out at the wrist. Its shadow is dithered, so it fades the same way."
+  "say": "The hand fades out at the wrist. Its shadow is dithered, so the shadow fades out in the same way."
  }
 ]

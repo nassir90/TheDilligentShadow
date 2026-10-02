@@ -3,7 +3,7 @@
   "say": "Her hair is simulated as cloth."
  },
  {
-  "say": "It's a grid of points hanging from the back of her head. Each point is linked to its neighbours, and gravity pulls the whole sheet down."
+  "say": "It's a tube of points that follows the shape of her ponytail. Each point is linked to its neighbours, and gravity pulls the whole tube down."
  },
  {
   "say": "In an early version, her hair jittered uncontrollably, even when she was standing still."

@@ -11,8 +11,11 @@ const [cmd, ...args] = process.argv.slice(2);
 
 async function pageWs() {
   const list = await (await fetch(`${BASE}/json/list`)).json();
-  let p = list.find(t => t.type === 'page');
-  if (!p) p = await (await fetch(`${BASE}/json/new?about:blank`, { method: 'PUT' })).json();
+  // TAB=<name> drives a second tab of its own (kept apart by a #tab=<name> in its URL), so compositing can run
+  // while a recording holds the default tab
+  const tab = process.env.TAB, mine = t => t.type === 'page' && (tab ? t.url.includes('#tab=' + tab) : !t.url.includes('#tab='));
+  let p = list.find(mine);
+  if (!p) p = await (await fetch(`${BASE}/json/new?about:blank${tab ? '%23tab=' + tab : ''}`, { method: 'PUT' })).json();
   return p.webSocketDebuggerUrl;
 }
 function rpc(url) {
@@ -34,7 +37,7 @@ if (cmd === 'launch') {
 if (cmd === 'quit') { const c = rpc((await (await fetch(`${BASE}/json/version`)).json()).webSocketDebuggerUrl); await c.ready; await c.send('Browser.close'); process.exit(0); }
 const c = rpc(await pageWs()); await c.ready;
 if (cmd === 'open') {
-  await c.send('Page.enable'); await c.send('Page.navigate', { url: args[0] });
+  await c.send('Page.enable'); await c.send('Page.navigate', { url: args[0] + (process.env.TAB ? '#tab=' + process.env.TAB : '') });
   for (let i = 0; i < 100; i++) { const r = await c.send('Runtime.evaluate', { expression: 'document.readyState', returnByValue: true }); if (r.result?.result?.value === 'complete') break; await new Promise(r => setTimeout(r, 100)); }
   console.log('opened', args[0]);
 } else if (cmd === 'eval') {
