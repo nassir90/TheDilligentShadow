@@ -23,6 +23,7 @@ Final re-render done (all clips recorded against the current exhibit: ponytail t
 | 02 Planted feet, 03 The cloak, 04 Her hair is cloth, 05 The visitor's hand | **ink** | scripts in plain sentences |
 | 06 The invisible cast, 07 Rigging her, 08 Smoothing her out, 09 Her brain is a state machine | **ink** | restyled; `edl.classic.js` keeps the old version |
 | 10 The Visitor, 11 The Shadow | cinematic | procedural score; The Visitor re-aligned with align.py |
+| 12 Building the site | **ink** | the page itself, recorded with devkit/pagecap.mjs (see below) |
 
 Scripts: plain, complete sentences; no spoken "Devlog." / "How it works:" openers (titles are on screen only), no punchy fragments,
 accurate words for what's on screen, no disclaimers. `script.prev.json` keeps each previous script.
@@ -70,3 +71,11 @@ The exhibit itself is served by the `site` preview (`python3 -m http.server 8780
 
 The cloak's "before" clips (`03-cloak-old` group) must be recorded in the build before the boot and friction fixes. To get it:
 `git show a7734ee:public/games/thedilligentshadow/exhibit.js > public/games/thedilligentshadow/exhibit-old.js` (the "Rig her fingers" commit, the last build before the boot and friction fixes) and a copy of `index.html` pointing at it (`old.html`). Delete both afterwards.
+
+## Page captures (video 12)
+
+`devkit/pagecap.mjs <clip>` records the whole web page (HTML text, credit line, 3D canvas) rather than just the canvas: headless Chrome at 540 x 960 CSS pixels and device scale 2 (frames are 1080 x 1920), the exhibit stepped by hand, the scroll set every frame, a real screenshot per frame. Clips are defined in `devkit/pagecap_clips.js`.
+
+- The compose tab must be in front while compositing (background tabs are throttled): `json/activate/<id>` on the `#tab=compose` tab.
+- The page's own text is faded out (`pcFade`) above the video's subtitle band, so the two never overlap; the plinth behind it is untouched.
+- The lag "before" clip needs the build before the native credit line (1ef52ce): `git show 1ef52ce:public/games/thedilligentshadow/exhibit.js > public/games/thedilligentshadow/exhibit-old.js` and an `old.html` pointing at it. Delete both afterwards.

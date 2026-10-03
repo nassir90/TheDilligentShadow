@@ -1,0 +1,26 @@
+[
+ {
+  "say": "The Diligent Shadow is a single web page, built with three.js and served from Cloudflare."
+ },
+ {
+  "say": "Clicking the plinth flies the camera between the whole room and a close-up of the switch."
+ },
+ {
+  "say": "The credit line is ordinary text on the page, but a shader paints each letter black or white, depending on what is behind it."
+ },
+ {
+  "say": "In the close-up, scrolling down lifts the plinth, and a page about the piece rises with it, written on the plinth's front face."
+ },
+ {
+  "say": "The page has no background of its own. As it scrolls, the camera drops by the same distance at the depth of the front face, so the plinth moves with the text."
+ },
+ {
+  "say": "At first, the credit line trailed behind the text, because it was drawn into the 3D frame a frame or two late. In the close-up, it is now part of the page itself, so it moves with everything else."
+ },
+ {
+  "say": "On phones, the 3D controls blocked every touch on the canvas, so now a swipe that starts on the plinth's front face scrolls the page instead."
+ },
+ {
+  "say": "At the bottom, the page links to the Roblox version of the piece."
+ }
+]
