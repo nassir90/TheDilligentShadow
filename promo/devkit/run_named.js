@@ -1,6 +1,0 @@
-// record only the clips named in window.NAMES (from the groups in window.GROUPS)
-window.requestAnimationFrame = () => 0;
-for (let i = 0; i < 40; i++) frame(1 / 60, 100 + i / 60);
-for (const f of ['rec.js', 'clips.js', 'clips_ink.js']) (0, eval)(await (await fetch('http://127.0.0.1:8781/devkit/' + f + '?' + Date.now())).text());
-const names = window.NAMES ? window.NAMES.split(',') : null, list = window.GROUPS.split(',').flatMap(g => (window.INK ? CLIPS_INK : CLIPS)[g]).filter(c => !names || names.includes(c.name));
-await REC.all(list); return `${REC.queue.done}/${REC.queue.of} ${REC.queue.err || ''}`;
